@@ -4,9 +4,9 @@ import { db } from '../firebase';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import OrganismoForm from './ListaUnidadesFuncionalesForm';
+import DetalleOrganismoForm from './DetalleOrganismoForm';
 
-export default function UnidadFuncionalForm({ organismoId }) {
+export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) {
   const [unidades, setUnidades] = useState([]);
   const [nuevaUF, setNuevaUF] = useState({
     denominacion: '',
@@ -20,6 +20,7 @@ export default function UnidadFuncionalForm({ organismoId }) {
   const formRef = useRef(null);
 
   useEffect(() => {
+    console.log("ID del organismo actual:", organismoId); // 👈 Agregá es
     const fetchUF = async () => {
       const ref = collection(db, `organismos/${organismoId}/unidades_funcionales`);
       const snapshot = await getDocs(ref);
@@ -77,7 +78,7 @@ export default function UnidadFuncionalForm({ organismoId }) {
   };
 
   if (mostrarFormularioOrg) {
-    return <OrganismoForm organismoId={organismoId} onVolver={() => setMostrarFormularioOrg(false)} />;
+    return <DetalleOrganismoForm organismoId={organismoId} onVolver={() => setMostrarFormularioOrg(false)} />;
   }
 
   return (
@@ -85,38 +86,6 @@ export default function UnidadFuncionalForm({ organismoId }) {
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-gray-800">Unidades Funcionales</h2>
         <Button variant="outline" onClick={() => setMostrarFormularioOrg(true)}>Detalles...</Button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {unidades.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center col-span-full">
-            No hay unidades funcionales registradas.
-          </p>
-        ) : (
-          unidades.map(uf => (
-            <Card key={uf.id} className="border border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-base text-blue-700 cursor-pointer" onClick={() => handleSelectUF(uf)}>
-                  {uf.denominacion}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-gray-700">
-                Localidad: {uf.localidad}<br />
-                Año de implementación: {uf.anio_implementacion || '—'}<br />
-                Domicilio: {uf.domicilio || '—'}<br />
-                Jueces asistidos: {uf.jueces_asistidos || '—'}
-                <div className="mt-2 flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => handleSelectUF(uf)}>
-                    Editar
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => handleDelete(uf.id)}>
-                    Borrar
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4" ref={formRef}>
@@ -157,6 +126,44 @@ export default function UnidadFuncionalForm({ organismoId }) {
           {editandoId ? 'Guardar Cambios' : 'Agregar Unidad Funcional'}
         </Button>
       </form>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {unidades.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center col-span-full">
+            No hay unidades funcionales registradas.
+          </p>
+        ) : (
+          unidades.map(uf => (
+            <Card key={uf.id} className="border border-gray-200">
+              <CardHeader>
+                <CardTitle className="text-base text-blue-700 cursor-pointer" onClick={() => handleSelectUF(uf)}>
+                  {uf.denominacion}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-gray-700">
+                Localidad: {uf.localidad}<br />
+                Año de implementación: {uf.anio_implementacion || '—'}<br />
+                Domicilio: {uf.domicilio || '—'}<br />
+                Jueces asistidos: {uf.jueces_asistidos || '—'}
+                <div className="mt-2 flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => handleSelectUF(uf)}>
+                    Editar
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => handleDelete(uf.id)}>
+                    Borrar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {onVolver && (
+        <div className="pt-6">
+          <Button variant="secondary" onClick={onVolver}>Volver</Button>
+        </div>
+      )}
     </div>
   );
 }

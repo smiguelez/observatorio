@@ -1,95 +1,43 @@
-import { useEffect, useState } from "react";
-import { auth, provider, signInWithPopup, signOut } from "./firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore";
-import { db } from "./firebase";
-
-import OrganismoForm from "./components/OrganismoForm";
-import OrganismoList from "./components/OrganismoList";
+import React from 'react';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth } from './firebase';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import ListaOrganismosForm from './components/ListaOrganismosForm'; // Asegurate de importar correctamente
+import { Button } from './components/ui/button';
 
 function App() {
-  const [user, setUser] = useState(null);
-  const [refreshList, setRefreshList] = useState(false);
+  const [user, loading, error] = useAuthState(auth);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
-  }, []);
-
-  const handleLogin = async () => {
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      const userRef = doc(db, "users", user.uid);
-      const docSnap = await getDoc(userRef);
-
-      if (!docSnap.exists()) {
-        await setDoc(userRef, {
-          displayName: user.displayName,
-          email: user.email,
-          photoURL: user.photoURL,
-          createdAt: new Date(),
-        });
-      }
-    } catch (error) {
-      console.error("Error al iniciar sesión:", error);
-    }
+  const handleLogin = () => {
+    const provider = new GoogleAuthProvider();
+    signInWithPopup(auth, provider).catch(err => {
+      console.error('Error al iniciar sesión:', err);
+    });
   };
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error("Error al cerrar sesión:", error);
-    }
-  };
-
-  const handleSaved = () => {
-    setRefreshList((prev) => !prev);
-  };
+  if (loading) return <p className="p-6">Cargando...</p>;
+  if (error) return <p className="p-6 text-red-600">Error: {error.message}</p>;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white text-gray-800 px-4 py-8">
-      <div className="max-w-6xl mx-auto">
-        <header className="flex flex-col md:flex-row justify-between items-center mb-12">
-          <h1 className="text-3xl md:text-4xl font-bold text-blue-900 text-center md:text-left">
-            Observatorio de Oficinas Judiciales JUFEJUS
+    <div className="min-h-screen bg-gray-50 p-6">
+      {user ? (
+        <>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-blue-800">Observatorio Federal de Oficinas Judiciales</h1>
+            <Button onClick={() => auth.signOut()}>Cerrar sesión</Button>
+          </div>
+          <ListaOrganismosForm user={user} />
+        </>
+      ) : (
+        <div className="text-center mt-20">
+          <h1 className="text-2xl font-semibold text-gray-800 mb-4">
+            <p> Observatorio de Oficinas Judiciales </p>
+            <p>JUFEJUS</p>
+            <p>¡Bienvenid@s!</p>
           </h1>
-          <div className="mt-4 md:mt-0">
-            {user ? (
-              <div className="text-right">
-                <p className="text-sm mb-1">Hola, {user.displayName}</p>
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-600 hover:bg-red-700 text-white text-sm px-4 py-2 rounded"
-                >
-                  Cerrar sesión
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={handleLogin}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded"
-              >
-                Iniciar sesión con Google
-              </button>
-            )}
-          </div>
-        </header>
-
-        {user ? (
-          <div className="space-y-10">
-            <OrganismoForm user={user} onSaved={handleSaved} />
-            <hr className="border-gray-300" />
-            <OrganismoList user={user} refreshFlag={refreshList} />
-          </div>
-        ) : (
-          <p className="text-center text-lg text-gray-600 mt-20">
-            Por favor iniciá sesión para acceder al sistema.
-          </p>
-        )}
-      </div>
+          <Button onClick={handleLogin}>Iniciar sesión con Google</Button>
+        </div>
+      )}
     </div>
   );
 }

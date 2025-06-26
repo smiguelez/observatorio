@@ -1,16 +1,18 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import DetalleOrganismoForm from './DetalleOrganismoForm';
+import OrganismoForm from './OrganismoForm';
 
 export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) {
   const [unidades, setUnidades] = useState([]);
+  const [organismo, setOrganismo] = useState(null);
+  const [localidades, setLocalidades] = useState([]);
   const [nuevaUF, setNuevaUF] = useState({
-    denominacion: '',
-    localidad: '',
+    denominacion_unidad: '',
+    localidad_id: '',
     anio_implementacion: '',
     domicilio: '',
     jueces_asistidos: ''
@@ -19,18 +21,51 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
   const [mostrarFormularioOrg, setMostrarFormularioOrg] = useState(false);
   const formRef = useRef(null);
 
+  const resetForm = () => {
+    setNuevaUF({
+      denominacion_unidad: '',
+      localidad_id: '',
+      anio_implementacion: '',
+      domicilio: '',
+      jueces_asistidos: ''
+    });
+    setEditandoId(null);
+  };
+
   useEffect(() => {
-    console.log("ID del organismo actual:", organismoId); // 👈 Agregá es
-    const fetchUF = async () => {
-      const ref = collection(db, `organismos/${organismoId}/unidades_funcionales`);
-      const snapshot = await getDocs(ref);
-      const lista = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setUnidades(lista);
+    console.log('Recibido organismoId:', organismoId);
+
+    const fetchDatos = async () => {
+      if (!organismoId) return;
+
+      const docRef = doc(db, 'organismos', organismoId);
+      const docSnap = await getDoc(docRef);
+
+      console.log('Documento organismo:', docSnap.exists(), docSnap.data());
+
+      if (!docSnap.exists()) return;
+
+      const org = { id: docSnap.id, ...docSnap.data() };
+      setOrganismo(org);
+
+      const ufSnap = await getDocs(collection(db, `organismos/${organismoId}/unidades_funcionales`));
+      const listaUF = ufSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUnidades(listaUF);
+      console.log('Unidades funcionales obtenidas:', listaUF);
+
+
+      const locSnap = await getDocs(collection(db, 'localidades'));
+      const listaLoc = locSnap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(loc => loc.provincia === org.provincia)
+        .sort((a, b) => a.nombre.localeCompare(b.nombre));
+      setLocalidades(listaLoc);
+     console.log('Localidades cargadas para esa provincia:', listaLoc);
+
+
     };
 
-    if (organismoId) {
-      fetchUF();
-    }
+    fetchDatos();
   }, [organismoId]);
 
   const handleChange = e => {
@@ -39,8 +74,8 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
 
   const handleSelectUF = uf => {
     setNuevaUF({
-      denominacion: uf.denominacion || '',
-      localidad: uf.localidad || '',
+      denominacion_unidad: uf.denominacion_unidad || '',
+      localidad_id: uf.localidad_id || '',
       anio_implementacion: uf.anio_implementacion || '',
       domicilio: uf.domicilio || '',
       jueces_asistidos: uf.jueces_asistidos || ''
@@ -53,39 +88,45 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
     await deleteDoc(doc(db, `organismos/${organismoId}/unidades_funcionales/${id}`));
     setUnidades(prev => prev.filter(uf => uf.id !== id));
     if (editandoId === id) {
-      setNuevaUF({ denominacion: '', localidad: '', anio_implementacion: '', domicilio: '', jueces_asistidos: '' });
-      setEditandoId(null);
+      resetForm();
     }
   };
 
   const handleSubmit = async e => {
     e.preventDefault();
-    if (!nuevaUF.denominacion || !nuevaUF.localidad) return;
+    if (!nuevaUF.denominacion_unidad || !nuevaUF.localidad_id) return;
 
-    if (editandoId) {
-      const ref = doc(db, `organismos/${organismoId}/unidades_funcionales/${editandoId}`);
-      await updateDoc(ref, nuevaUF);
-    } else {
-      await addDoc(collection(db, `organismos/${organismoId}/unidades_funcionales`), nuevaUF);
-    }
+    const ref = editandoId
+      ? doc(db, `organismos/${organismoId}/unidades_funcionales/${editandoId}`)
+      : collection(db, `organismos/${organismoId}/unidades_funcionales`);
+
+    editandoId ? await updateDoc(ref, nuevaUF) : await addDoc(ref, nuevaUF);
 
     const snapshot = await getDocs(collection(db, `organismos/${organismoId}/unidades_funcionales`));
     const lista = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     setUnidades(lista);
+    resetForm();
+  };
 
-    setNuevaUF({ denominacion: '', localidad: '', anio_implementacion: '', domicilio: '', jueces_asistidos: '' });
-    setEditandoId(null);
+  const getNombreLocalidad = id => {
+    const loc = localidades.find(l => l.id === id);
+    return loc ? `${loc.nombre} (${loc.provincia})` : '—';
   };
 
   if (mostrarFormularioOrg) {
-    return <DetalleOrganismoForm organismoId={organismoId} onVolver={() => setMostrarFormularioOrg(false)} />;
+    return <OrganismoForm organismoId={organismoId} onVolver={() => setMostrarFormularioOrg(false)} />;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold text-gray-800">Unidades Funcionales</h2>
-        <Button variant="outline" onClick={() => setMostrarFormularioOrg(true)}>Detalles...</Button>
+      <div>
+        <p className="text-2xl font-bold text-gray-800 mb-1">
+          Provincia: <span className="font-semibold">{organismo?.provincia || '—'}</span>
+        </p>
+        <h2 className="text-2xl font-bold text-gray-800 mb-1">
+          Organismo: <span className="font-semibold">{organismo?.denominacion || '—'}</span>
+        </h2>
+        <h3 className="text-xl font-semibold text-gray-700">Unidades Funcionales</h3>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4" ref={formRef}>
@@ -93,17 +134,25 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
           {editandoId ? 'Editar Unidad Funcional' : 'Agregar Nueva Unidad Funcional'}
         </h3>
         <Input
-          name="denominacion"
+          name="denominacion_unidad"
           placeholder="Denominación"
-          value={nuevaUF.denominacion}
+          value={nuevaUF.denominacion_unidad}
           onChange={handleChange}
         />
-        <Input
-          name="localidad"
-          placeholder="Localidad"
-          value={nuevaUF.localidad}
+        <select
+          name="localidad_id"
+          value={nuevaUF.localidad_id}
           onChange={handleChange}
-        />
+          className="w-full border px-3 py-2 rounded text-sm"
+          disabled={!organismo}
+        >
+          <option value="">Seleccionar Localidad</option>
+          {localidades.map(loc => (
+            <option key={loc.id} value={loc.id}>
+              {loc.nombre} ({loc.provincia})
+            </option>
+          ))}
+        </select>
         <Input
           name="anio_implementacion"
           placeholder="Año de Implementación"
@@ -137,11 +186,11 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
             <Card key={uf.id} className="border border-gray-200">
               <CardHeader>
                 <CardTitle className="text-base text-blue-700 cursor-pointer" onClick={() => handleSelectUF(uf)}>
-                  {uf.denominacion}
+                  {uf.denominacion_unidad || '—'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-gray-700">
-                Localidad: {uf.localidad}<br />
+                Localidad: {getNombreLocalidad(uf.localidad_id)}<br />
                 Año de implementación: {uf.anio_implementacion || '—'}<br />
                 Domicilio: {uf.domicilio || '—'}<br />
                 Jueces asistidos: {uf.jueces_asistidos || '—'}
@@ -158,12 +207,6 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
           ))
         )}
       </div>
-
-      {onVolver && (
-        <div className="pt-6">
-          <Button variant="secondary" onClick={onVolver}>Volver</Button>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from './firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import ListaOrganismosForm from './components/ListaOrganismosForm'; // Asegurate de importar correctamente
+import ListaOrganismosForm from './components/ListaOrganismosForm';
 import { Button } from './components/ui/button';
 
 function App() {
   const [user, loading, error] = useAuthState(auth);
+  const [organismo, setOrganismo] = useState({});
 
   const handleLogin = () => {
     const provider = new GoogleAuthProvider();
@@ -26,12 +27,14 @@ function App() {
             <h1 className="text-3xl font-bold text-blue-800">Observatorio Federal de Oficinas Judiciales</h1>
             <Button onClick={() => auth.signOut()}>Cerrar sesión</Button>
           </div>
+
+          {/* Lista de organismos (filtro/listado) */}
           <ListaOrganismosForm user={user} />
         </>
       ) : (
         <div className="text-center mt-20">
           <h1 className="text-2xl font-semibold text-gray-800 mb-4">
-            <p> Observatorio de Oficinas Judiciales </p>
+            <p>Observatorio de Oficinas Judiciales</p>
             <p>JUFEJUS</p>
             <p>¡Bienvenid@s!</p>
           </h1>

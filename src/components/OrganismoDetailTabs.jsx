@@ -4,7 +4,7 @@ import OrganismoForm from "./OrganismoForm";
 import ListaUnidadesFuncionalesForm from "./ListaUnidadesFuncionalesForm";
 import TaxonomiaForm from "./TaxonomiaForm";
 import { Button } from "@/components/ui/button";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "@/firebase";
 
 const estructuraVacia = {
@@ -19,6 +19,15 @@ const estructuraVacia = {
       grado_implementacion: ''
     }
   }
+};
+
+// ✅ Función para verificar si hay datos útiles en taxonomía
+const tieneDatosTaxonomia = (taxonomia) => {
+  if (!taxonomia || !taxonomia.v1) return false;
+
+  return Object.values(taxonomia.v1).some((bloque) => {
+    return Object.values(bloque).some((valor) => valor && valor.trim() !== "");
+  });
 };
 
 export default function OrganismoDetailTabs({ organismo, setOrganismo, onVolver }) {
@@ -36,12 +45,20 @@ export default function OrganismoDetailTabs({ organismo, setOrganismo, onVolver 
   const handleGuardarTodo = async () => {
     try {
       const ref = doc(db, "organismos", organismo.id);
-      const { id, actualizado_a, ...resto } = organismo;
 
+      const { id, actualizado_a, taxonomia, ...resto } = organismo;
+
+      // ✅ Guardar documento principal del organismo
       await updateDoc(ref, {
         ...resto,
-        actualizado_a: new Date().toISOString()
+        actualizado_a: new Date().toISOString(),
       });
+
+      // ✅ Guardar taxonomía solo si tiene datos útiles
+      if (tieneDatosTaxonomia(taxonomia)) {
+        const taxonomiaRef = doc(db, "organismos", organismo.id, "taxonomia", "v1");
+        await setDoc(taxonomiaRef, taxonomia.v1, { merge: true });
+      }
 
       alert("Cambios guardados correctamente.");
     } catch (error) {

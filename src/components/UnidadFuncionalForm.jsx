@@ -10,6 +10,7 @@ export default function UnidadFuncionalForm({ organismoId }) {
   const [unidades, setUnidades] = useState([]);
   const [nuevaUF, setNuevaUF] = useState({
     denominacion: '',
+    tipo_uf: '',
     localidad: '',
     anio_implementacion: '',
     domicilio: '',
@@ -39,6 +40,7 @@ export default function UnidadFuncionalForm({ organismoId }) {
   const handleSelectUF = uf => {
     setNuevaUF({
       denominacion: uf.denominacion || '',
+      tipo_uf: uf.tipo_uf || '',
       localidad: uf.localidad || '',
       anio_implementacion: uf.anio_implementacion || '',
       domicilio: uf.domicilio || '',
@@ -52,7 +54,7 @@ export default function UnidadFuncionalForm({ organismoId }) {
     await deleteDoc(doc(db, `organismos/${organismoId}/unidades_funcionales/${id}`));
     setUnidades(prev => prev.filter(uf => uf.id !== id));
     if (editandoId === id) {
-      setNuevaUF({ denominacion: '', localidad: '', anio_implementacion: '', domicilio: '', jueces_asistidos: '' });
+      setNuevaUF({ denominacion: '', tipo_uf: '', localidad: '', anio_implementacion: '', domicilio: '', jueces_asistidos: '' });
       setEditandoId(null);
     }
   };
@@ -72,7 +74,7 @@ export default function UnidadFuncionalForm({ organismoId }) {
     const lista = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     setUnidades(lista);
 
-    setNuevaUF({ denominacion: '', localidad: '', anio_implementacion: '', domicilio: '', jueces_asistidos: '' });
+    setNuevaUF({ denominacion: '', tipo_uf: '', localidad: '', anio_implementacion: '', domicilio: '', jueces_asistidos: '' });
     setEditandoId(null);
   };
 
@@ -94,13 +96,14 @@ export default function UnidadFuncionalForm({ organismoId }) {
           </p>
         ) : (
           unidades.map(uf => (
-            <Card key={uf.id} className="border border-gray-200">
+            <Card key={uf.id} className="border border-gray-200 bg-blue-100 p-4">
               <CardHeader>
                 <CardTitle className="text-base text-blue-700 cursor-pointer" onClick={() => handleSelectUF(uf)}>
                   {uf.denominacion}
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-gray-700">
+                Tipo de Unidad Funcional: {uf.tipo_uf || '-'}
                 Localidad: {uf.localidad}<br />
                 Año de implementación: {uf.anio_implementacion || '—'}<br />
                 Domicilio: {uf.domicilio || '—'}<br />
@@ -153,6 +156,19 @@ export default function UnidadFuncionalForm({ organismoId }) {
           value={nuevaUF.jueces_asistidos}
           onChange={handleChange}
         />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de UF</label>
+          <select
+            name="tipo_uf"
+            value={nuevaUF.tipo_uf}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded text-sm"
+          >
+            <option value="">Seleccionar Tipo de UF</option>
+            <option value="Delegación">Delegación</option>
+            <option value="Subdelegación">Subdelegación</option>
+          </select>
+        </div>        
         <Button type="submit">
           {editandoId ? 'Guardar Cambios' : 'Agregar Unidad Funcional'}
         </Button>

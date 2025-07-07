@@ -27,7 +27,10 @@ export default function TaxonomiaForm({ taxonomia, onChange }) {
   return (
     <div className="space-y-8">
       {Object.entries(taxonomiaOptions).map(([dimension, campos]) => (
-        <div key={dimension} className="border p-4 rounded-xl shadow">
+        <div
+          key={dimension}
+          className="border p-4 rounded-xl shadow bg-blue-100" // Fondo azul claro para cada recuadro
+        >
           <h2 className="text-lg font-semibold capitalize mb-4">{dimension}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {Object.entries(campos).map(([campo, opciones]) => (

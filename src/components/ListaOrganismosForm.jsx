@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { query, collection, getDocs, where } from 'firebase/firestore'; // 👈 faltaba importar "where"
 import { db } from '../firebase';
 import { Card, CardContent, CardHeader } from './ui/card';
@@ -24,6 +25,7 @@ export default function ListaOrganismosForm({ user }) {
   const [organismos, setOrganismos] = useState([]);
   const [unidadesPorOrganismo, setUnidadesPorOrganismo] = useState({});
   const [organismoSeleccionado, setOrganismoSeleccionado] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchOrganismos = async () => {
@@ -39,8 +41,12 @@ export default function ListaOrganismosForm({ user }) {
         const lista = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         setOrganismos(lista);
-        fetchUnidadesPorOrganismo(lista);
-        fetchTaxonomiaPorOrganismo(lista);
+        
+        await Promise.all ([
+          fetchUnidadesPorOrganismo(lista),
+          fetchTaxonomiaPorOrganismo(lista)
+        ])
+        
       } catch (error) {
         console.error('Error obteniendo organismos:', error);
       }
@@ -108,6 +114,14 @@ export default function ListaOrganismosForm({ user }) {
         <p>Observatorio de Oficinas Judiciales JUFEJUS</p>
         <p className="text-lg font-medium text-gray-700">Mis Organismos Informados</p>
       </h2>
+
+      <button
+        className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-700 mb-6"
+        onClick={() => navigate('/')}
+      >
+        Volver al menú
+      </button>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {organismos.length === 0 ? (
           <p className="text-sm text-gray-500 text-center col-span-full">

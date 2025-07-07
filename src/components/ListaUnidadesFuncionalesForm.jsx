@@ -13,6 +13,7 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
   const [nuevaUF, setNuevaUF] = useState({
     denominacion_unidad: '',
     localidad_id: '',
+    tipo_uf: '', // Agregar tipo_uf aquí
     anio_implementacion: '',
     domicilio: '',
     jueces_asistidos: ''
@@ -25,6 +26,7 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
     setNuevaUF({
       denominacion_unidad: '',
       localidad_id: '',
+      tipo_uf: '',  // Limpiar tipo_uf también
       anio_implementacion: '',
       domicilio: '',
       jueces_asistidos: ''
@@ -53,16 +55,13 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
       setUnidades(listaUF);
       console.log('Unidades funcionales obtenidas:', listaUF);
 
-
       const locSnap = await getDocs(collection(db, 'localidades'));
       const listaLoc = locSnap.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(loc => loc.provincia === org.provincia)
         .sort((a, b) => a.nombre.localeCompare(b.nombre));
       setLocalidades(listaLoc);
-     console.log('Localidades cargadas para esa provincia:', listaLoc);
-
-
+      console.log('Localidades cargadas para esa provincia:', listaLoc);
     };
 
     fetchDatos();
@@ -76,6 +75,7 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
     setNuevaUF({
       denominacion_unidad: uf.denominacion_unidad || '',
       localidad_id: uf.localidad_id || '',
+      tipo_uf: uf.tipo_uf || '',  // Asegurarse de que tipo_uf se pase correctamente
       anio_implementacion: uf.anio_implementacion || '',
       domicilio: uf.domicilio || '',
       jueces_asistidos: uf.jueces_asistidos || ''
@@ -113,12 +113,9 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
     return loc ? `${loc.nombre} (${loc.provincia})` : '—';
   };
 
-  if (mostrarFormularioOrg) {
-    return <OrganismoForm organismoId={organismoId} onVolver={() => setMostrarFormularioOrg(false)} />;
-  }
-
   return (
     <div className="space-y-6">
+      {/* Mostrar listado de unidades funcionales */}
       <div>
         <p className="text-2xl font-bold text-gray-800 mb-1">
           Provincia: <span className="font-semibold">{organismo?.provincia || '—'}</span>
@@ -129,8 +126,42 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
         <h3 className="text-xl font-semibold text-gray-700">Unidades Funcionales</h3>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {unidades.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center col-span-full">
+            No hay unidades funcionales registradas.
+          </p>
+        ) : (
+          unidades.map(uf => (
+            <Card key={uf.id} className="border border-gray-200 bg-blue-100 p-4">
+              <CardHeader>
+                <CardTitle className="text-base text-blue-700 cursor-pointer" onClick={() => handleSelectUF(uf)}>
+                  {uf.denominacion_unidad || '—'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-gray-700">
+                Tipo de Unidad Funcional: {uf.tipo_uf || '-'}<br />
+                Localidad: {getNombreLocalidad(uf.localidad_id)}<br />
+                Año de implementación: {uf.anio_implementacion || '—'}<br />
+                Domicilio: {uf.domicilio || '—'}<br />
+                Jueces asistidos: {uf.jueces_asistidos || '—'}
+                <div className="mt-2 flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => handleSelectUF(uf)}>
+                    Editar
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => handleDelete(uf.id)}>
+                    Borrar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Formulario de edición de unidad funcional */}
       <form onSubmit={handleSubmit} className="space-y-4" ref={formRef}>
-        <h3 className="text-lg font-medium text-gray-800">
+        <h3 className="text-lg font-medium text-gray-800 mt-6">
           {editandoId ? 'Editar Unidad Funcional' : 'Agregar Nueva Unidad Funcional'}
         </h3>
         <Input
@@ -171,42 +202,23 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
           value={nuevaUF.jueces_asistidos}
           onChange={handleChange}
         />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de UF</label>
+          <select
+            name="tipo_uf"
+            value={nuevaUF.tipo_uf}
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded text-sm"
+          >
+            <option value="">Seleccionar Tipo de UF</option>
+            <option value="Delegación">Delegación</option>
+            <option value="Subdelegación">Subdelegación</option>
+          </select>
+        </div>
         <Button type="submit">
           {editandoId ? 'Guardar Cambios' : 'Agregar Unidad Funcional'}
         </Button>
       </form>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {unidades.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center col-span-full">
-            No hay unidades funcionales registradas.
-          </p>
-        ) : (
-          unidades.map(uf => (
-            <Card key={uf.id} className="border border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-base text-blue-700 cursor-pointer" onClick={() => handleSelectUF(uf)}>
-                  {uf.denominacion_unidad || '—'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-gray-700">
-                Localidad: {getNombreLocalidad(uf.localidad_id)}<br />
-                Año de implementación: {uf.anio_implementacion || '—'}<br />
-                Domicilio: {uf.domicilio || '—'}<br />
-                Jueces asistidos: {uf.jueces_asistidos || '—'}
-                <div className="mt-2 flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => handleSelectUF(uf)}>
-                    Editar
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => handleDelete(uf.id)}>
-                    Borrar
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
     </div>
   );
 }

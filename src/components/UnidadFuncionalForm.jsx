@@ -57,6 +57,8 @@ export default function UnidadFuncionalForm({ organismoId }) {
       setNuevaUF({ denominacion: '', tipo_uf: '', localidad: '', anio_implementacion: '', domicilio: '', jueces_asistidos: '' });
       setEditandoId(null);
     }
+    // Actualizar el campo 'actualizado_a' del organismo
+    await actualizarActualizadoA();
   };
 
   const handleSubmit = async e => {
@@ -76,6 +78,31 @@ export default function UnidadFuncionalForm({ organismoId }) {
 
     setNuevaUF({ denominacion: '', tipo_uf: '', localidad: '', anio_implementacion: '', domicilio: '', jueces_asistidos: '' });
     setEditandoId(null);
+
+    // Actualizar el campo 'actualizado_a' del organismo
+    await actualizarActualizadoA();
+  };
+
+  const actualizarActualizadoA = async () => {
+    try {
+      // Verificar si estamos dentro de la función
+      console.log(`Entrando a actualizar el campo 'actualizado_a' para el organismo con ID: ${organismoId}`);
+
+      // Obtener la referencia del organismo
+      const organismoRef = doc(db, 'organismos', organismoId);
+
+      // Verificar si la referencia es válida
+      console.log(`Referencia del organismo: ${organismoRef.path}`);
+
+      // Actualizar el campo 'actualizado_a' con la fecha y hora actual
+      await updateDoc(organismoRef, {
+        actualizado_a: new Date()  // Establecer la fecha y hora actual
+      });
+
+      console.log('Fecha de actualización registrada en el organismo.');
+    } catch (error) {
+      console.error("Error al actualizar el campo actualizado_a:", error);
+    }
   };
 
   if (mostrarFormularioOrg) {

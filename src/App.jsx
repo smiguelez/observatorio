@@ -93,7 +93,17 @@ function App() {
     }
 
     // Guardamos o actualizamos los datos del usuario sin sobrescribir completamente los datos existentes
-    await setDoc(userRef, userData, { merge: true });
+    await setDoc(userRef, {
+      displayName: user.displayName,
+      email: user.email,
+      emailVerified: user.emailVerified,
+      photoURL: user.photoURL,
+      createdAt: userData.createdAt || new Date().toISOString(),
+      lastSignInTime: user.metadata.lastSignInTime,
+      createdAtGoogle: user.metadata.creationTime,
+      rol: userData.rol || ['usuario_normal'],
+    }, { merge: true });
+    
     console.log('Datos de Google copiados a Firestore, con rol(s):', userData.rol);
   };
 

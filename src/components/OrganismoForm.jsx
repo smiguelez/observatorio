@@ -6,6 +6,22 @@ export default function OrganismoForm({ organismo, setOrganismo }) {
     setOrganismo({ ...organismo, [e.target.name]: e.target.value });
   };
 
+  // Verificar si 'actualizado_a' es un Timestamp válido y convertirlo
+  const getActualizadoA = () => {
+    if (organismo.actualizado_a) {
+      // Verificar si es un objeto Timestamp de Firestore
+      if (organismo.actualizado_a instanceof Object && 'toDate' in organismo.actualizado_a) {
+        return organismo.actualizado_a.toDate().toLocaleString();
+      }
+      // Si es una cadena de texto, podemos intentar convertirla
+      else if (typeof organismo.actualizado_a === 'string') {
+        const date = new Date(organismo.actualizado_a);
+        return date.toLocaleString();
+      }
+    }
+    return null;  // Si no es un timestamp válido o cadena, retornamos null
+  };
+
   return (
     <div className="space-y-6 px-6 w-full">
       <h2 className="text-xl font-semibold text-gray-800">Detalle del Organismo</h2>
@@ -67,10 +83,13 @@ export default function OrganismoForm({ organismo, setOrganismo }) {
         />
       </div>
 
-      {organismo.actualizado_a && organismo.actualizado_a.toDate && (
+      {/* Mostrar la última actualización */}
+      {getActualizadoA() ? (
         <p className="text-sm text-gray-500 mt-4">
-          Última actualización: {organismo.actualizado_a.toDate().toLocaleString()}
+          Última actualización: {getActualizadoA()}
         </p>
+      ) : (
+        <p className="text-sm text-gray-500 mt-4">Última actualización no disponible.</p>
       )}
     </div>
   );

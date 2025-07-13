@@ -10,6 +10,8 @@ import GestionOrganismosForm from './components/GestionOrganismosForm';
 import { Button } from './components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { UserProvider } from './components/UserContext';
+import ReportesPage from './components/ReportesPage';
+import VolverAlMenu from './components/VolverAlMenu';
 
 function App() {
   const [user, loading, error] = useAuthState(auth);
@@ -138,17 +140,26 @@ function App() {
       {user && isAuthorized ? (
         <>
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-blue-800">Observatorio Federal de Oficinas Judiciales</h1>
-            <Button onClick={() => {
-              signOut(auth);
-              navigate('/');
-            }}>Cerrar sesión</Button>
+            <h1 className="text-3xl font-bold text-blue-800">JUFEJUS - Observatorio Federal de Oficinas Judiciales</h1>
+
+            <div className="flex items-center gap-4">
+              <VolverAlMenu />
+              <Button
+                onClick={() => {
+                  signOut(auth);
+                  navigate('/');
+                }}
+              >
+                Cerrar sesión
+              </Button>
+            </div>
           </div>
 
           <UserProvider>
             <Routes>
               <Route path="/" element={<MenuPage isAdmin={isAdmin} />} />
               <Route path="/organismos" element={<ListaOrganismosForm user={user} />} />
+              <Route path="/reportes" element={<ReportesPage />} />
               {/* Solo el admin puede ver el formulario de gestión */}
               {isAdmin && <Route path="/gestion" element={<GestionOrganismosForm user={user} />} />}
             </Routes>

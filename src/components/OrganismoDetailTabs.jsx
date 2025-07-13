@@ -4,7 +4,7 @@ import OrganismoForm from "./OrganismoForm";
 import ListaUnidadesFuncionalesForm from "./ListaUnidadesFuncionalesForm";
 import TaxonomiaForm from "./TaxonomiaForm";
 import { Button } from "@/components/ui/button";
-import { doc, updateDoc, setDoc } from "firebase/firestore";
+import { doc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/firebase";
 
 const estructuraVacia = {
@@ -51,7 +51,7 @@ export default function OrganismoDetailTabs({ organismo, setOrganismo, onVolver 
       // ✅ Guardar documento principal del organismo
       await updateDoc(ref, {
         ...resto,
-        actualizado_a: new Date().toISOString(),
+        actualizado_a: serverTimestamp(),
       });
 
       // ✅ Guardar taxonomía solo si tiene datos útiles
@@ -116,6 +116,7 @@ export default function OrganismoDetailTabs({ organismo, setOrganismo, onVolver 
         <TabsContent value="taxonomia">
           <TaxonomiaForm
             taxonomia={organismo.taxonomia}
+            tipo_oficina={organismo.tipo_oficina}
             onChange={(nuevaTaxonomia) => {
               setOrganismo((prev) => ({
                 ...prev,

@@ -1,10 +1,17 @@
 import React, { useEffect } from 'react';
 import { taxonomiaOptions } from '@/constants/taxonomiaOptions';
 
-export default function TaxonomiaForm({ taxonomia, onChange }) {
-  useEffect(() => {
-    console.log("🔁 TaxonomiaForm se volvió a renderizar con taxonomia:", taxonomia);
-  }, [taxonomia]);
+export default function TaxonomiaForm({ taxonomia, tipo_oficina, onChange }) {
+  const oficinasSinTaxonomia = ['coordinación', 'unidad operativa'];
+
+  if (oficinasSinTaxonomia.includes(tipo_oficina)) {
+    return (
+      <div className="p-4 border rounded bg-yellow-50 text-yellow-800 text-sm">
+        ⚠ La taxonomía no corresponde para este tipo de oficina:{" "}
+        <strong>{tipo_oficina}</strong>
+      </div>
+    );
+  }
 
   const handleChange = (dimension, campo, value) => {
     const nuevaTaxonomia = {
@@ -17,8 +24,6 @@ export default function TaxonomiaForm({ taxonomia, onChange }) {
       },
     };
 
-    console.log("🛠 NUEVA TAXONOMIA EN handleChange:", nuevaTaxonomia);
-
     if (typeof onChange === "function") {
       onChange(nuevaTaxonomia);
     }
@@ -29,7 +34,7 @@ export default function TaxonomiaForm({ taxonomia, onChange }) {
       {Object.entries(taxonomiaOptions).map(([dimension, campos]) => (
         <div
           key={dimension}
-          className="border p-4 rounded-xl shadow bg-blue-100" // Fondo azul claro para cada recuadro
+          className="border p-4 rounded-xl shadow bg-blue-100"
         >
           <h2 className="text-lg font-semibold capitalize mb-4">{dimension}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -39,19 +44,15 @@ export default function TaxonomiaForm({ taxonomia, onChange }) {
                   {campo.replace(/_/g, ' ')}
                 </label>
 
-                {/* Mostrar valor actual */}
                 <p className="text-xs text-gray-500 mb-1">
                   Valor actual: {taxonomia?.v1?.[dimension]?.[campo] || "(vacío)"}
                 </p>
 
-                {console.log("📌 RENDER SELECT", dimension, campo, "=", taxonomia?.v1?.[dimension]?.[campo])}
-
                 <select
                   value={taxonomia?.v1?.[dimension]?.[campo] || ''}
-                  onChange={(e) => {
-                    console.log("🟢 Cambio detectado:", campo, "=", e.target.value);
-                    handleChange(dimension, campo, e.target.value);
-                  }}
+                  onChange={(e) =>
+                    handleChange(dimension, campo, e.target.value)
+                  }
                   className="mt-1 block w-full rounded-md border border-gray-300 bg-white py-2 px-3 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
                 >
                   <option value="">Seleccionar...</option>

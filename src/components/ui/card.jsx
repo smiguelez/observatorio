@@ -1,8 +1,13 @@
 // src/components/ui/card.jsx
 import React from 'react';
 
-export function Card({ children, className = '' }) {
-  return <div className={`bg-white rounded-lg shadow-md p-4 ${className}`}>{children}</div>;
+export function Card({ children, className = '', style }) {
+  return <div 
+    className={`rounded-lg shadow-md p-4 ${className}`}
+    style={style}
+    >
+      {children}
+    </div>;
 }
 
 export function CardHeader({ children }) {

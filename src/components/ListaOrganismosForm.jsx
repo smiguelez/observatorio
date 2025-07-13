@@ -4,7 +4,7 @@ import { query, collection, getDocs, where } from 'firebase/firestore'; // 👈 
 import { db } from '../firebase';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
-import { Building2 } from 'lucide-react';
+import { Building2, Landmark } from 'lucide-react';
 import OrganismoDetailTabs from './OrganismoDetailTabs';
 
 const coloresTipoOficina = {
@@ -115,14 +115,7 @@ export default function ListaOrganismosForm({ user }) {
         <p className="text-lg font-medium text-gray-700">Mis Organismos Informados</p>
       </h2>
 
-      <button
-        className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-700 mb-6"
-        onClick={() => navigate('/')}
-      >
-        Volver al menú
-      </button>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {organismos.length === 0 ? (
           <p className="text-sm text-gray-500 text-center col-span-full">
             No hay organismos registrados.
@@ -132,7 +125,7 @@ export default function ListaOrganismosForm({ user }) {
             <Card key={org.id} className="relative border border-gray-200">
               <CardHeader className="flex flex-col items-start gap-1">
                 <div className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-blue-800" />
+                  <Landmark className="h-5 w-5 text-blue-800" />
                   <span className="text-base font-semibold text-blue-700">
                     {org.denominacion}
                   </span>

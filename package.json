@@ -16,6 +16,8 @@
     "firebase": "^11.9.1",
     "firebase-admin": "^13.4.0",
     "googleapis": "^150.0.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.519.0",
     "papaparse": "^5.5.3",
     "react": "^19.1.0",

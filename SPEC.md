@@ -5,9 +5,9 @@ Cada funcionalidad nueva se documenta como una sección propia, con fecha de cre
 
 ---
 
-## 1. Reportes de completitud por organismo/UF (branch `feature/reportes-monitoreo`)
+## 1. Reportes de completitud por organismo/UF (branch `feature/reportes-monitoreo`) [Implementado]
 **Fecha:** 2026-07-04
-**Estado:** Pendiente de implementación
+**Estado:** Implementado 2026-07-04
 **Archivo a modificar:** `src/components/GestionOrganismosForm.jsx` (no crear componente nuevo — acceso admin-only, ya existente)
 
 ### 1.1 Alcance
@@ -31,10 +31,14 @@ Un **organismo** se considera completo si cumple las tres condiciones:
    - `implementacion.grado_implementacion`
 
    Si falta alguno: **incompleto**, motivo `"Taxonomía incompleta: [campos faltantes]"`.
+
+   **Excepción:** esta regla aplica únicamente cuando `tipo_oficina` es `"OFICINA JUDICIAL"` u `"OFICINA JUDICIAL ESPECIALIZADA"`. Para `"COORDINACIÓN"`, `"UNIDAD OPERATIVA"` u otros valores, la taxonomía se omite completamente: no se evalúa, no suma ni resta a la completitud del organismo.
+
 3. Cada documento de `unidades_funcionales` tiene todos sus campos con valor no vacío:
    `denominacion_unidad`, `localidad_id`, `tipo_uf`, `domicilio`, `codigo_postal`, `telefono`, `mail`, `responsable`, `jueces_asistidos`, `anio_implementacion`.
+   Adicionalmente, `jueces_asistidos` debe ser convertible a número. Si tiene valor pero no es numérico, la UF se marca incompleta con motivo `"jueces_asistidos: debe ser numérico"`. Esta validación es solo de reporte — el formulario de carga (`UnidadFuncionalForm.jsx`) no se modifica.
 
-Una **unidad funcional (UF)** individual se considera completa si cumple la condición 3 por sí sola (todos sus campos con valor).
+Una **unidad funcional (UF)** individual se considera completa si cumple la condición 3 por sí sola (todos sus campos con valor y `jueces_asistidos` numérico).
 
 **Casos especiales — mostrar siempre como "incompleto" con motivo aclarado, nunca mezclados en un solo número:**
 - Organismo sin ninguna UF → no aporta al conteo de UF (ni completas ni incompletas), pero aparece en el detalle como incompleto con motivo "Sin unidades funcionales".
@@ -58,6 +62,7 @@ Provincia A
 Provincia B
 ...
 ```
+**Nota de implementación (2026-07-04):** la agrupación original de `GestionOrganismosForm.jsx` (organismos por usuario, sin completitud) fue reemplazada por esta nueva estructura (resumen por usuario + detalle por provincia), no convive con la anterior. Validado como aceptable: único usuario del formulario es el propio admin del sistema.
 
 ### 1.5 Performance
 - Volumen actual: ~100 organismos, ~260 unidades funcionales — no requiere paginación ni lazy-load.

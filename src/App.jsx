@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import MenuPage from './components/MenuPage';
 import ListaOrganismosForm from './components/ListaOrganismosForm';
 import GestionOrganismosForm from './components/GestionOrganismosForm';
+import AsignarEditoresForm from './components/AsignarEditoresForm';
 import { Button } from './components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { UserProvider } from './components/UserContext';
@@ -162,6 +163,7 @@ function App() {
               <Route path="/reportes" element={<ReportesPage />} />
               {/* Solo el admin puede ver el formulario de gestión */}
               {isAdmin && <Route path="/gestion" element={<GestionOrganismosForm user={user} />} />}
+              {isAdmin && <Route path="/asignar-editores" element={<AsignarEditoresForm />} />}
             </Routes>
           </UserProvider>
         </>

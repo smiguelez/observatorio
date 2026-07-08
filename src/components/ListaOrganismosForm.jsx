@@ -32,13 +32,16 @@ export default function ListaOrganismosForm({ user }) {
       if (!user || !user.email) return;
 
       try {
-        const q = query(
-          collection(db, 'organismos'),
-          where('usuario_google', '==', user.email)
-        );
+        const [snapOwner, snapEditor] = await Promise.all([
+          getDocs(query(collection(db, 'organismos'), where('usuario_google', '==', user.email))),
+          getDocs(query(collection(db, 'organismos'), where('editores', 'array-contains', user.email))),
+        ]);
 
-        const snapshot = await getDocs(q);
-        const lista = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const porId = new Map();
+        [...snapOwner.docs, ...snapEditor.docs].forEach(d => {
+          if (!porId.has(d.id)) porId.set(d.id, { id: d.id, ...d.data() });
+        });
+        const lista = [...porId.values()];
 
         setOrganismos(lista);
         

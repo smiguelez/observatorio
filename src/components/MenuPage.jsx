@@ -24,14 +24,22 @@ export default function MenuPage({ isAdmin }) {
         Reporte PowerBI
       </Link>
 
-      {/* Mostrar el botón "Gestiona Organismos" solo si el usuario es admin */}
+      {/* Links exclusivos para admin */}
       {isAdmin && (
-        <Link
-          to="/gestion"
-          className="bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700"
-        >
-          Gestiona Organismos
-        </Link>
+        <>
+          <Link
+            to="/gestion"
+            className="bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700"
+          >
+            Gestiona Organismos
+          </Link>
+          <Link
+            to="/asignar-editores"
+            className="bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700"
+          >
+            Asignar Editores
+          </Link>
+        </>
       )}
 
     </div>

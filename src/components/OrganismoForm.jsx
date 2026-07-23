@@ -51,17 +51,23 @@ export default function OrganismoForm({ organismo, setOrganismo }) {
 
   // Opciones hardcodeadas para tipo de oficina
   const tipoOficinaOptions = [
-    "oficina judicial",  
+    "oficina judicial",
     "oficina judicial especializada",
     "coordinación",
     "unidad operativa"
   ];
+
+  // Opciones hardcodeadas para fuero simplificado
+  const fueroOptions = ["penal", "civil", "familia", "laboral"];
 
   const valorActualDenominacion = (organismo.denominacion_simplificada || '').trim();
   const existeEnOpcionesDenominacion = denominacionSimplificadaOptions.includes(valorActualDenominacion);
 
   const valorActualTipoOficina = (organismo.tipo_oficina || '').trim();
   const existeEnOpcionesTipoOficina = tipoOficinaOptions.includes(valorActualTipoOficina);
+
+  const valorActualFuero = (organismo.fuero_simplificado || '').trim().toLowerCase();
+  const existeEnOpcionesFuero = fueroOptions.includes(valorActualFuero);
 
   const getActualizadoA = () => {
     if (organismo.actualizado_a) {
@@ -134,6 +140,27 @@ export default function OrganismoForm({ organismo, setOrganismo }) {
             <option key={opt} value={opt}>
               {opt}
             </option>
+          ))}
+        </select>
+
+        <label htmlFor="fuero_simplificado" className="text-left font-medium text-gray-700">
+          Fuero:
+        </label>
+        <select
+          id="fuero_simplificado"
+          name="fuero_simplificado"
+          value={valorActualFuero}
+          onChange={handleChange}
+          className="w-full border px-3 py-2 rounded text-sm"
+        >
+          {!existeEnOpcionesFuero && valorActualFuero && (
+            <option value={valorActualFuero}>
+              {valorActualFuero} (valor existente no listado)
+            </option>
+          )}
+          <option value="">Seleccionar Fuero</option>
+          {fueroOptions.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
           ))}
         </select>
 

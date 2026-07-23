@@ -15,10 +15,10 @@ const coloresTipoOficina = {
 };
 
 const coloresFuero = {
-  'PENAL': 'bg-red-100 text-red-800',
-  'CIVIL': 'bg-green-100 text-green-800',
-  'FAMILIA': 'bg-blue-100 text-blue-800',
-  'LABORAL': 'bg-orange-100 text-orange-800',
+  'penal': 'bg-red-100 text-red-800',
+  'civil': 'bg-green-100 text-green-800',
+  'familia': 'bg-blue-100 text-blue-800',
+  'laboral': 'bg-orange-100 text-orange-800',
 };
 
 export default function ListaOrganismosForm({ user }) {
@@ -145,7 +145,7 @@ export default function ListaOrganismosForm({ user }) {
                     {org.tipo_oficina || '—'}
                   </span>
                   <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                    coloresFuero[(org.fuero_simplificado || '').toUpperCase().trim()] || 'bg-gray-200 text-gray-800'
+                    coloresFuero[(org.fuero_simplificado || '').toLowerCase().trim()] || 'bg-gray-200 text-gray-800'
                   }`}>
                     {org.fuero_simplificado || '—'}
                   </span>

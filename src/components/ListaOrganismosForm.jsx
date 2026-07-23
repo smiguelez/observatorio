@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { query, collection, getDocs, where } from 'firebase/firestore'; // 👈 faltaba importar "where"
 import { db } from '../firebase';
 import { Card, CardContent, CardHeader } from './ui/card';
@@ -25,7 +24,6 @@ export default function ListaOrganismosForm({ user }) {
   const [organismos, setOrganismos] = useState([]);
   const [unidadesPorOrganismo, setUnidadesPorOrganismo] = useState({});
   const [organismoSeleccionado, setOrganismoSeleccionado] = useState(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchOrganismos = async () => {

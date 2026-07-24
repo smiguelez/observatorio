@@ -7,7 +7,9 @@ Cada funcionalidad nueva se documenta como una sección propia, con fecha de cre
 Lista rápida de lo que falta instalar/resolver, con link a la sección de detalle:
 - **Migración a Postgres + hosting ARSAT** (§2) — en planificación, no iniciado.
 - **Rediseño del modelo de fueros** — normalización a minúsculas ya hecha (§4.1); falta el array `fueros` para representar `multifuero` (§4.2) — no iniciado, sin fecha.
-- **Verificación de Firestore Security Rules** (rol admin y validación de `editores`/`usuario_google`) (§1.6, §3.3) — estado real sin confirmar, pendiente de chequear en Firebase Console.
+- **Verificación de Firestore Security Rules** (rol admin y validación de `editores`/`usuario_google`/`provincia`) (§1.6, §3.3, §5.2) — estado real sin confirmar, pendiente de chequear en Firebase Console.
+- **Alta de organismo** (§5) — implementado, pendiente prueba manual end-to-end en navegador.
+- **Asignación de `provincia` a usuarios no-admin** — no existe ningún formulario para cargar `users.provincia` (§5.2); hasta que se resuelva, todo usuario no-admin ve el mensaje de "no podés crear organismos".
 
 ---
 
@@ -154,3 +156,26 @@ Sigue sin resolver el caso de los 14 organismos (~12%) con valor `"multifuero"`:
 
 ### No incluido en este spec
 La normalización de §4.1 ya se implementó. El array `fueros` de §4.2 es una nota de diseño para una funcionalidad futura, sin fecha de implementación.
+
+---
+
+## 5. Alta de organismo (branch `feature/edicion-fuero-y-alta-organismo`) [Implementado]
+**Fecha:** 2026-07-23
+**Estado:** Implementado 2026-07-23. Probado con lint y build; **pendiente prueba manual end-to-end en navegador** (login + creación real) antes de darlo por validado.
+**Archivos:** `src/components/CrearOrganismoForm.jsx` (nuevo), `src/constants/organismoOptions.js` (nuevo), `src/components/OrganismoForm.jsx` (refactor), `src/App.jsx`, `src/components/MenuPage.jsx`
+
+### 5.1 Alcance
+Nuevo formulario en `/crear-organismo`, visible para cualquier usuario autenticado (no solo admin), que da de alta un documento en `organismos`.
+
+Campos: `denominacion`, `denominacion_simplificada` (select), `tipo_oficina` (select), `provincia`, `fuero_simplificado` (select) — los 5 obligatorios. Al crear, además se setea `usuario_google = email del creador`, `editores: []`, `legacy_id: null`, `actualizado_a: serverTimestamp()`. No crea `taxonomia` ni `unidades_funcionales` (se cargan después desde el detalle, como ya funciona para organismos existentes).
+
+### 5.2 Reglas de acceso a `provincia` (client-side)
+- Admin: `provincia` es un select editable con las 24 jurisdicciones (ver 5.3).
+- No-admin: se lee `provincia` de `users/{email}` (Firestore). Si existe, el campo queda fijo/no editable con ese valor. Si no existe, no se renderiza el formulario — se muestra un mensaje pidiendo que un admin le asigne provincia. Hoy no hay ningún formulario que cargue `provincia` en `users`, así que todo usuario no-admin ve ese mensaje hasta que se resuelva manualmente (ej. edición directa en Firestore) o se construya una pantalla para asignarla.
+- **Client-side únicamente** — mismo punto abierto que §1.6/§3.3: no hay Firestore Security Rules confirmadas que validen esto del lado del servidor.
+
+### 5.3 Catálogo de provincias (nuevo, hardcodeado)
+No existía ninguna lista canónica de las 24 jurisdicciones (provincias + CABA) en el código ni en Firestore — la colección `localidades` solo cubre 21 (le faltan La Rioja, Misiones y Santa Cruz, sin localidades cargadas aún). Se agregó `provinciaOptions` en `src/constants/organismoOptions.js`, respetando la ortografía ya usada en `localidades` (ej. "Entre Rios", "Rio Negro" sin tilde) para no introducir una grafía distinta que rompa agrupaciones por provincia en otras pantallas (mismo tipo de problema que tenía `fuero_simplificado`, ver §4).
+
+### 5.4 Refactor: opciones de organismo a archivo compartido
+`denominacionSimplificadaOptions`, `tipoOficinaOptions` y `fueroOptions` estaban hardcodeadas dentro de `OrganismoForm.jsx`. Se movieron a `src/constants/organismoOptions.js` para reusarlas en `CrearOrganismoForm.jsx` sin duplicar el array de 39 denominaciones; `OrganismoForm.jsx` ahora las importa de ahí. Sin cambio de comportamiento.

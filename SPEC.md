@@ -3,6 +3,14 @@
 ## Convención de este archivo
 Cada funcionalidad nueva se documenta como una sección propia, con fecha de creación. No se borran specs anteriores al implementarlas: se marcan como `[Implementado]` y se dejan como referencia histórica de decisiones.
 
+## Pendientes — resumen
+Lista rápida de lo que falta instalar/resolver, con link a la sección de detalle:
+- **Migración a Postgres + hosting ARSAT** (§2) — en planificación, no iniciado.
+- **Rediseño del modelo de fueros** — normalización a minúsculas ya hecha (§4.1); falta el array `fueros` para representar `multifuero` (§4.2) — no iniciado, sin fecha.
+- **Verificación de Firestore Security Rules** (rol admin y validación de `editores`/`usuario_google`/`provincia`) (§1.6, §3.3, §5.2) — estado real sin confirmar, pendiente de chequear en Firebase Console.
+- **Alta de organismo** (§5) — implementado, pendiente prueba manual end-to-end en navegador.
+- **Asignación de `provincia` a usuarios no-admin** — no existe ningún formulario para cargar `users.provincia` (§5.2); hasta que se resuelva, todo usuario no-admin ve el mensaje de "no podés crear organismos".
+
 ---
 
 ## 1. Reportes de completitud por organismo/UF (branch `feature/reportes-monitoreo`) [Implementado]
@@ -72,6 +80,7 @@ Provincia B
 - `GestionOrganismosForm.jsx` no tiene verificación visible de rol admin más allá del chequeo en cliente. No hay confirmación de que existan Firestore Security Rules del lado del servidor validando `rol == 'admin'`.
 - **Decisión:** se posterga la corrección hasta la migración a Postgres (branch `develop`), dado que los datos son públicos (información institucional de oficinas judiciales) y no hay riesgo de confidencialidad.
 - **Fecha de esta decisión:** 2026-07-04. Si la migración se extiende más de unos meses desde esta fecha, revisar si vale la pena resolver esto antes, igual.
+- **Actualización 2026-07-23:** ver también §3.3 — la misma duda sobre Firestore Security Rules se extiende ahora a la validación de `editores`/`usuario_google` (feature de §3). Sigue sin resolverse ni verificarse; no se encontró ningún `firestore.rules` versionado en el repo.
 
 ---
 
@@ -85,3 +94,88 @@ Puntos ya acordados, a formalizar en spec propio antes de codificar:
 - Postgres debe quedar en red interna, sin exposición directa a internet, ni siquiera detrás de autenticación.
 - Pendiente: confirmar con el equipo de ARSAT los puntos de la lista de preguntas de infraestructura (IP pública, SSL, acceso al servidor, CI/CD, backups, compliance institucional, continuidad del dominio actual).
 - Auditoría de código pendiente, por módulos, antes de diseñar el esquema relacional (ya se hizo un primer relevamiento de Firestore — ver documento de análisis del 2026-07-04).
+
+---
+
+## 3. Editores por organismo (branch `feature/mejoras-actuales`, PR #2) [Implementado]
+**Fecha:** 2026-07-07
+**Estado:** Implementado 2026-07-07 (commit `3587c06`)
+**Archivos:** `src/components/AsignarEditoresForm.jsx` (nuevo), `src/components/ListaOrganismosForm.jsx`, `src/components/MenuPage.jsx`, `src/App.jsx`
+
+### 3.1 Alcance
+Un organismo puede tener, además del `usuario_google` propietario, una lista `editores` (array de emails) con acceso de edición compartido:
+- Nueva vista admin-only "Asignar Editores" (`/asignar-editores`), que agrupa organismos por provincia y permite agregar/quitar emails de la lista `editores` de cada uno.
+- `ListaOrganismosForm.jsx` ahora resuelve los organismos visibles para un usuario con dos queries en paralelo (`usuario_google == user.email` y `editores array-contains user.email`), deduplicadas por id.
+
+### 3.2 Nota de documentación retroactiva
+Esta sección se agrega el 2026-07-23, con posterioridad a la implementación, para cerrar el hueco de documentación: la funcionalidad ya estaba mergeada a `main` pero no tenía sección propia, en contra de la convención de este archivo.
+
+### 3.3 Pendiente de verificación — Firestore Security Rules
+El mensaje del commit `3587c06` incluye "security rules" entre sus cambios, pero no se encontró ningún archivo `firestore.rules` versionado en el repo. No está confirmado si:
+- (a) las reglas se configuraron manualmente en Firebase Console (fuera de control de versiones), o
+- (b) el mensaje del commit se refiere solo a la lógica de visibilidad del lado del cliente (las dos queries de 3.1), sin reglas server-side reales que impidan a un usuario no autorizado leer/escribir organismos ajenos.
+
+**Acción pendiente:** verificar el estado real de las Firestore Security Rules del proyecto en Firebase Console antes de asumir que la validación de `usuario_google`/`editores` (o el rol admin de §1.6) está resuelta del lado del servidor.
+
+---
+
+## 4. Modelo de fueros — rediseño futuro (no iniciado)
+**Fecha:** 2026-07-23
+**Estado:** Normalización de mayúsculas/minúsculas implementada 2026-07-23. Resto (array `fueros`, `multifuero`) pendiente, sin fecha de inicio.
+
+### Hallazgo
+`fuero_simplificado` es un único campo string por organismo. Relevamiento real sobre los 114 documentos de `organismos` (2026-07-23, vía `scripts/inspeccionar-campos-organismos.cjs`, solo lectura) encontró la siguiente distribución de valores:
+
+| Valor | Cantidad |
+|---|---|
+| `penal` | 40 |
+| `civil` | 26 |
+| `multifuero` | 14 |
+| `laboral` | 12 |
+| `familia` | 11 |
+| (vacío) | 10 |
+| `PENAL` (mayúscula) | 1 |
+
+Es decir: **113 de los 114 documentos** ya estaban en minúsculas — el enum hardcodeado que usaba el código (`PENAL`, `CIVIL`, `FAMILIA`, `LABORAL`) era el que estaba en el caso equivocado, no los datos.
+
+### 4.1 Resuelto — enum del código pasado a minúsculas [Implementado]
+**Fecha:** 2026-07-23
+En vez de migrar los datos, se cambió el enum hardcodeado y la lógica de normalización a minúsculas, que es el caso real de la enorme mayoría de los documentos:
+- `OrganismoForm.jsx`: `fueroOptions` ahora es `["penal", "civil", "familia", "laboral"]`; `valorActualFuero` normaliza con `.toLowerCase()` en vez de `.toUpperCase()`.
+- `ListaOrganismosForm.jsx`: claves de `coloresFuero` en minúsculas; el lookup del badge normaliza con `.toLowerCase()`.
+- El único documento con valor `PENAL` (mayúscula) sigue funcionando: normaliza a `penal` para el badge/color, y el `<select>` lo deja editar vía value directo (no rompe, pero al guardar cualquier cambio queda en minúsculas como el resto).
+
+Esto no requirió tocar datos en Firestore — el cambio es solo de código.
+
+### 4.2 Pendiente — `multifuero` y campo `fueros` (array)
+Sigue sin resolver el caso de los 14 organismos (~12%) con valor `"multifuero"`: no matchea ninguna de las 4 opciones del `<select>`, se sigue mostrando vía el fallback "valor existente no listado". Diseño futuro propuesto, sin fecha de inicio:
+- Nuevo campo `fueros` (array) para representar todos los fueros que atiende un organismo.
+- `fuero_simplificado` se mantiene como derivado/resumen para reportes agregados y colores de badge — criterio de cómo se deriva (¿el más frecuente? ¿asignación manual?) queda a definir.
+- Migrar los 14 casos `multifuero` y los 10 casos vacíos al poblar el nuevo array `fueros`.
+- Considerar tabla de catálogo `fueros` en la migración a Postgres (branch `develop`, §2), en vez de mantener el enum hardcodeado en el código como está hoy.
+
+### No incluido en este spec
+La normalización de §4.1 ya se implementó. El array `fueros` de §4.2 es una nota de diseño para una funcionalidad futura, sin fecha de implementación.
+
+---
+
+## 5. Alta de organismo (branch `feature/edicion-fuero-y-alta-organismo`) [Implementado]
+**Fecha:** 2026-07-23
+**Estado:** Implementado 2026-07-23. Probado con lint y build; **pendiente prueba manual end-to-end en navegador** (login + creación real) antes de darlo por validado.
+**Archivos:** `src/components/CrearOrganismoForm.jsx` (nuevo), `src/constants/organismoOptions.js` (nuevo), `src/components/OrganismoForm.jsx` (refactor), `src/App.jsx`, `src/components/MenuPage.jsx`
+
+### 5.1 Alcance
+Nuevo formulario en `/crear-organismo`, visible para cualquier usuario autenticado (no solo admin), que da de alta un documento en `organismos`.
+
+Campos: `denominacion`, `denominacion_simplificada` (select), `tipo_oficina` (select), `provincia`, `fuero_simplificado` (select) — los 5 obligatorios. Al crear, además se setea `usuario_google = email del creador`, `editores: []`, `legacy_id: null`, `actualizado_a: serverTimestamp()`. No crea `taxonomia` ni `unidades_funcionales` (se cargan después desde el detalle, como ya funciona para organismos existentes).
+
+### 5.2 Reglas de acceso a `provincia` (client-side)
+- Admin: `provincia` es un select editable con las 24 jurisdicciones (ver 5.3).
+- No-admin: se lee `provincia` de `users/{email}` (Firestore). Si existe, el campo queda fijo/no editable con ese valor. Si no existe, no se renderiza el formulario — se muestra un mensaje pidiendo que un admin le asigne provincia. Hoy no hay ningún formulario que cargue `provincia` en `users`, así que todo usuario no-admin ve ese mensaje hasta que se resuelva manualmente (ej. edición directa en Firestore) o se construya una pantalla para asignarla.
+- **Client-side únicamente** — mismo punto abierto que §1.6/§3.3: no hay Firestore Security Rules confirmadas que validen esto del lado del servidor.
+
+### 5.3 Catálogo de provincias (nuevo, hardcodeado)
+No existía ninguna lista canónica de las 24 jurisdicciones (provincias + CABA) en el código ni en Firestore — la colección `localidades` solo cubre 21 (le faltan La Rioja, Misiones y Santa Cruz, sin localidades cargadas aún). Se agregó `provinciaOptions` en `src/constants/organismoOptions.js`, respetando la ortografía ya usada en `localidades` (ej. "Entre Rios", "Rio Negro" sin tilde) para no introducir una grafía distinta que rompa agrupaciones por provincia en otras pantallas (mismo tipo de problema que tenía `fuero_simplificado`, ver §4).
+
+### 5.4 Refactor: opciones de organismo a archivo compartido
+`denominacionSimplificadaOptions`, `tipoOficinaOptions` y `fueroOptions` estaban hardcodeadas dentro de `OrganismoForm.jsx`. Se movieron a `src/constants/organismoOptions.js` para reusarlas en `CrearOrganismoForm.jsx` sin duplicar el array de 39 denominaciones; `OrganismoForm.jsx` ahora las importa de ahí. Sin cambio de comportamiento.

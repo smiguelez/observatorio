@@ -1,67 +1,24 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
+import {
+  denominacionSimplificadaOptions,
+  tipoOficinaOptions,
+  fueroOptions
+} from '@/constants/organismoOptions';
 
 export default function OrganismoForm({ organismo, setOrganismo }) {
   const handleChange = (e) => {
     setOrganismo({ ...organismo, [e.target.name]: e.target.value });
   };
 
-  // Opciones hardcodeadas para denominación simplificada
-  const denominacionSimplificadaOptions = [
-    "OFICINA JUDICIAL",
-    "OFICINA DE IMPUGNACIÓN",
-    "DIRECCION GRAL DE OFICINAS JUDICIALES",
-    "OFICINA DE TRAMITACION INTEGRAL",
-    "COORDINACION OFICINAS JUDICIALES",
-    "OFICINA DE GESTIÓN DE AUDIENCIAS",
-    "OFICINA DE GESTIÓN UNICA",
-    "OFICINA JUDICIAL CENTRAL",
-    "OFICINA JUDICIAL DE JUICIO POR JURADOS",
-    "OFICINA DE GESTIÓN UNIFICADA",
-    "TRIBUNAL DE GESTIÓN ASOCIADA",
-    "OFICINA DE PROCESOS",
-    "OFICINA DE TRAMITES",
-    "OFICINA GESTIÓN Y APOYO",
-    "OFICINA DE GESTIÓN JUDICIAL",
-    "OFICINA DE RECEPCIÓN DE EXPEDIENTES",
-    "MESA ENTRADAS",
-    "OFICINA DE COORDINACIÓN",
-    "OFICINA UNICA",
-    "OFICINA DE ATENCIÓN CENTRALIZADA",
-    "OFICINA DE ENTRADA",
-    "UNIDAD DE SEGUIMIENTO",
-    "UNIDAD DE COORDINACIÓN",
-    "OFICINA DE SERVICIOS PROCESALES",
-    "OFICINA DE JURADOS",
-    "OFICINA DE GESTIÓN COMUN",
-    "OFICINA DE PROCESOS SUCESORIOS",
-    "SECRETARIA DE GESTIÓN ADMINISTRATIVA",
-    "OFICINA DE GESTIÓN ADMINISTRATIVA",
-    "OFICINA JUDICIAL DE GESTIÓN ASOCIADA",
-    "GESTIÓN JUDICIAL ASOCIADA",
-    "OFICINA JUDICIAL DE AUDIENCIAS",
-    "OFICINA CENTRAL DE JUICIOS POR JURADOS",
-    "OFICINA DE GESTION ASOCIADA",
-    "COORDINACION OGA",
-    "OFICINA DE COORDINACION ESTRATEGICA DE PLANIFICACION Y GESTION",
-    "OFICINA DE GESTION JUDICIAL",
-    "OFICINA DE GESTIÓN DIGITAL",
-    "COMISIÓN TÉCNICA"
-  ];
-
-  // Opciones hardcodeadas para tipo de oficina
-  const tipoOficinaOptions = [
-    "oficina judicial",  
-    "oficina judicial especializada",
-    "coordinación",
-    "unidad operativa"
-  ];
-
   const valorActualDenominacion = (organismo.denominacion_simplificada || '').trim();
   const existeEnOpcionesDenominacion = denominacionSimplificadaOptions.includes(valorActualDenominacion);
 
   const valorActualTipoOficina = (organismo.tipo_oficina || '').trim();
   const existeEnOpcionesTipoOficina = tipoOficinaOptions.includes(valorActualTipoOficina);
+
+  const valorActualFuero = (organismo.fuero_simplificado || '').trim().toLowerCase();
+  const existeEnOpcionesFuero = fueroOptions.includes(valorActualFuero);
 
   const getActualizadoA = () => {
     if (organismo.actualizado_a) {
@@ -134,6 +91,27 @@ export default function OrganismoForm({ organismo, setOrganismo }) {
             <option key={opt} value={opt}>
               {opt}
             </option>
+          ))}
+        </select>
+
+        <label htmlFor="fuero_simplificado" className="text-left font-medium text-gray-700">
+          Fuero:
+        </label>
+        <select
+          id="fuero_simplificado"
+          name="fuero_simplificado"
+          value={valorActualFuero}
+          onChange={handleChange}
+          className="w-full border px-3 py-2 rounded text-sm"
+        >
+          {!existeEnOpcionesFuero && valorActualFuero && (
+            <option value={valorActualFuero}>
+              {valorActualFuero} (valor existente no listado)
+            </option>
+          )}
+          <option value="">Seleccionar Fuero</option>
+          {fueroOptions.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
           ))}
         </select>
 

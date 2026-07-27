@@ -22,7 +22,7 @@ const TAXONOMIA_CAMPOS = [
   ['implementacion', 'grado_implementacion'],
 ];
 
-const TIPOS_CON_TAXONOMIA = ['OFICINA JUDICIAL', 'OFICINA JUDICIAL ESPECIALIZADA'];
+const TIPOS_CON_TAXONOMIA = ['oficina judicial', 'oficina judicial especializada'];
 
 function evaluarUF(data) {
   const faltantes = UF_CAMPOS.filter(c => !data[c] || String(data[c]).trim() === '');
@@ -43,7 +43,7 @@ function evaluarOrganismo(ufs, taxonomia, tipo_oficina) {
     return { completo: false, motivo: 'Sin unidades funcionales' };
   }
 
-  if (TIPOS_CON_TAXONOMIA.includes(tipo_oficina)) {
+  if (TIPOS_CON_TAXONOMIA.includes((tipo_oficina || '').toLowerCase())) {
     if (!taxonomia) {
       return { completo: false, motivo: 'Taxonomía incompleta: todos los campos ausentes' };
     }

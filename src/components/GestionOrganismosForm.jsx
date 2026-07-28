@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { resolverJueces } from '@/utils/juecesHelpers';
 
 const UF_CAMPOS = [
   'denominacion_unidad', 'localidad_id', 'tipo_uf', 'domicilio',
@@ -22,15 +23,21 @@ const TAXONOMIA_CAMPOS = [
   ['implementacion', 'grado_implementacion'],
 ];
 
-const TIPOS_CON_TAXONOMIA = ['OFICINA JUDICIAL', 'OFICINA JUDICIAL ESPECIALIZADA'];
+const TIPOS_CON_TAXONOMIA = ['oficina judicial', 'oficina judicial especializada'];
 
 function evaluarUF(data) {
-  const faltantes = UF_CAMPOS.filter(c => !data[c] || String(data[c]).trim() === '');
+  const camposRequeridos = data.pool_jueces_id
+    ? UF_CAMPOS.filter(c => c !== 'jueces_asistidos')
+    : UF_CAMPOS;
+
+  const faltantes = camposRequeridos.filter(c => !data[c] || String(data[c]).trim() === '');
   const errores = faltantes.length > 0 ? [`Campos faltantes: ${faltantes.join(', ')}`] : [];
 
-  const ja = data.jueces_asistidos;
-  if (ja && String(ja).trim() !== '' && isNaN(Number(ja))) {
-    errores.push('jueces_asistidos: debe ser numérico');
+  if (!data.pool_jueces_id) {
+    const ja = data.jueces_asistidos;
+    if (ja && String(ja).trim() !== '' && isNaN(Number(ja))) {
+      errores.push('jueces_asistidos: debe ser numérico');
+    }
   }
 
   return errores.length === 0
@@ -43,7 +50,7 @@ function evaluarOrganismo(ufs, taxonomia, tipo_oficina) {
     return { completo: false, motivo: 'Sin unidades funcionales' };
   }
 
-  if (TIPOS_CON_TAXONOMIA.includes(tipo_oficina)) {
+  if (TIPOS_CON_TAXONOMIA.includes((tipo_oficina || '').toLowerCase())) {
     if (!taxonomia) {
       return { completo: false, motivo: 'Taxonomía incompleta: todos los campos ausentes' };
     }
@@ -91,7 +98,7 @@ function getNombreLocalidad(id, localidadesMap) {
   return loc ? `${loc.nombre} (${loc.provincia})` : id || '—';
 }
 
-function exportarPDF(provincia, orgs, localidadesMap) {
+function exportarPDF(provincia, orgs, localidadesMap, poolsMap) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const fecha = new Date().toLocaleDateString('es-AR');
   const margen = 14;
@@ -148,19 +155,20 @@ function exportarPDF(provincia, orgs, localidadesMap) {
     } else {
       autoTable(doc, {
         startY: y + 3,
-        head: [['Unidad funcional', 'Localidad', 'Tipo UF', 'Estado', 'Motivo']],
+        head: [['Unidad funcional', 'Localidad', 'Tipo UF', 'Jueces', 'Estado', 'Motivo']],
         body: org.ufs.map(uf => [
           uf.denominacion_unidad || '(sin nombre)',
           getNombreLocalidad(uf.localidad_id, localidadesMap),
           uf.tipo_uf || '—',
+          resolverJueces(uf, poolsMap),
           uf.evaluacion.completa ? 'Completa' : 'Incompleta',
           uf.evaluacion.completa ? '' : (uf.evaluacion.motivo || ''),
         ]),
         styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [75, 85, 99] },
-        columnStyles: { 0: { cellWidth: 45 }, 1: { cellWidth: 45 }, 2: { cellWidth: 25 }, 3: { cellWidth: 22 }, 4: { cellWidth: 'auto' } },
+        columnStyles: { 0: { cellWidth: 42 }, 1: { cellWidth: 40 }, 2: { cellWidth: 22 }, 3: { cellWidth: 18 }, 4: { cellWidth: 20 }, 5: { cellWidth: 'auto' } },
         didParseCell(data) {
-          if (data.column.index === 3 && data.section === 'body') {
+          if (data.column.index === 4 && data.section === 'body') {
             data.cell.styles.fillColor = data.cell.raw === 'Completa'
               ? [198, 239, 206]
               : [255, 199, 206];
@@ -182,20 +190,26 @@ function exportarPDF(provincia, orgs, localidadesMap) {
 export default function OrganismosFormulario() {
   const [organismos, setOrganismos] = useState([]);
   const [localidades, setLocalidades] = useState(new Map());
+  const [poolsMap, setPoolsMap] = useState(new Map());
   const [loading, setLoading] = useState(true);
   const [abiertos, setAbiertos] = useState(new Set());
 
   useEffect(() => {
     const fetchTodo = async () => {
       try {
-        const [organismoSnap, localidadSnap] = await Promise.all([
+        const [organismoSnap, localidadSnap, poolSnap] = await Promise.all([
           getDocs(collection(db, 'organismos')),
           getDocs(collection(db, 'localidades')),
+          getDocs(collection(db, 'pools_jueces')),
         ]);
 
         const locMap = new Map(
           localidadSnap.docs.map(d => [d.id, { id: d.id, ...d.data() }])
         );
+        const pMap = new Map(
+          poolSnap.docs.map(d => [d.id, d.data().cantidad_jueces])
+        );
+        setPoolsMap(pMap);
 
         const base = organismoSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -295,8 +309,8 @@ export default function OrganismosFormulario() {
                     <span
                       role="button"
                       tabIndex={0}
-                      onClick={(e) => { e.stopPropagation(); exportarPDF(provincia, orgs, localidades); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); exportarPDF(provincia, orgs, localidades); } }}
+                      onClick={(e) => { e.stopPropagation(); exportarPDF(provincia, orgs, localidades, poolsMap); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); exportarPDF(provincia, orgs, localidades, poolsMap); } }}
                       className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                     >
                       Exportar PDF
@@ -312,6 +326,7 @@ export default function OrganismosFormulario() {
                         key={org.id}
                         organismo={org}
                         localidadesMap={localidades}
+                        poolsMap={poolsMap}
                       />
                     ))}
                   </div>
@@ -328,7 +343,7 @@ export default function OrganismosFormulario() {
 
 // ─── Sección 2: componentes acordeón ────────────────────────────────────────
 
-function OrganismoAcordeon({ organismo, localidadesMap }) {
+function OrganismoAcordeon({ organismo, localidadesMap, poolsMap }) {
   const { evaluacion, ufs } = organismo;
 
   return (
@@ -356,7 +371,7 @@ function OrganismoAcordeon({ organismo, localidadesMap }) {
       ) : (
         <div className="space-y-2 pl-3 border-l-2 border-gray-200">
           {ufs.map(uf => (
-            <UFAcordeon key={uf.id} uf={uf} localidadesMap={localidadesMap} />
+            <UFAcordeon key={uf.id} uf={uf} localidadesMap={localidadesMap} poolsMap={poolsMap} />
           ))}
         </div>
       )}
@@ -364,7 +379,7 @@ function OrganismoAcordeon({ organismo, localidadesMap }) {
   );
 }
 
-function UFAcordeon({ uf, localidadesMap }) {
+function UFAcordeon({ uf, localidadesMap, poolsMap }) {
   const { evaluacion } = uf;
   const nombreLocalidad = getNombreLocalidad(uf.localidad_id, localidadesMap);
 
@@ -419,7 +434,9 @@ function UFAcordeon({ uf, localidadesMap }) {
         </div>
         <div>
           <span className="text-gray-400">Jueces asistidos: </span>
-          <span className={!uf.jueces_asistidos ? 'text-red-400 italic' : ''}>{uf.jueces_asistidos || '—'}</span>
+          <span className={!uf.pool_jueces_id && !uf.jueces_asistidos ? 'text-red-400 italic' : ''}>
+            {resolverJueces(uf, poolsMap)}
+          </span>
         </div>
       </div>
     </div>

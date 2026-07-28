@@ -7,9 +7,9 @@ Cada funcionalidad nueva se documenta como una sección propia, con fecha de cre
 Lista rápida de lo que falta instalar/resolver, con link a la sección de detalle:
 - **Migración a Postgres + hosting ARSAT** (§2) — en planificación, no iniciado.
 - **Rediseño del modelo de fueros** — normalización a minúsculas ya hecha (§4.1); falta el array `fueros` para representar `multifuero` (§4.2) — no iniciado, sin fecha.
-- **Verificación de Firestore Security Rules** (rol admin y validación de `editores`/`usuario_google`/`provincia`) (§1.6, §3.3, §5.2) — estado real sin confirmar, pendiente de chequear en Firebase Console.
+- ~~**Verificación de Firestore Security Rules**~~ — confirmado y documentado 2026-07-27 (§3.3): rol admin (`esAdmin()`) y acceso de owner/editor (`esOwnerOEditor()`) están validados del lado del servidor. La restricción de `provincia` en el alta de organismo (§5.2) sigue siendo solo client-side — las rules no la validan.
 - **Alta de organismo** (§5) — implementado, pendiente prueba manual end-to-end en navegador.
-- **Asignación de `provincia` a usuarios no-admin** — no existe ningún formulario para cargar `users.provincia` (§5.2); hasta que se resuelva, todo usuario no-admin ve el mensaje de "no podés crear organismos".
+- ~~**Asignación de `provincia` a usuarios no-admin**~~ — resuelto por `GestionUsuariosForm.jsx` (§7): admin puede asignar `provincia` a cualquier usuario existente o al dar de alta uno nuevo. Lo que sigue sin resolver: la validación server-side de `provincia` en `allow create` de `organismos` (ver §3.3 y §5.2).
 
 ---
 
@@ -81,6 +81,16 @@ Provincia B
 - **Decisión:** se posterga la corrección hasta la migración a Postgres (branch `develop`), dado que los datos son públicos (información institucional de oficinas judiciales) y no hay riesgo de confidencialidad.
 - **Fecha de esta decisión:** 2026-07-04. Si la migración se extiende más de unos meses desde esta fecha, revisar si vale la pena resolver esto antes, igual.
 - **Actualización 2026-07-23:** ver también §3.3 — la misma duda sobre Firestore Security Rules se extiende ahora a la validación de `editores`/`usuario_google` (feature de §3). Sigue sin resolverse ni verificarse; no se encontró ningún `firestore.rules` versionado en el repo.
+- **Actualización 2026-07-27:** resuelto — ver §3.3. Las rules confirmadas incluyen `esAdmin()`, que restringe `get`/`list` sobre `organismos` (y por lo tanto el listado completo que usa `GestionOrganismosForm.jsx`) a admins u owners/editores del documento. Siguen sin versionarse en el repo (viven solo en Firebase Console), pero su contenido ya está documentado en §3.3.
+
+### 1.7 Corrección de casing en `TIPOS_CON_TAXONOMIA` [Implementado]
+**Fecha:** 2026-07-27
+
+`TIPOS_CON_TAXONOMIA` (constante de `GestionOrganismosForm.jsx` que decide si a un organismo se le exige `taxonomia/v1` completa, ver regla 2 de §1.2) estaba hardcodeada como `['OFICINA JUDICIAL', 'OFICINA JUDICIAL ESPECIALIZADA']` (mayúsculas), pero el dato real de `tipo_oficina` en Firestore está en minúscula en 113 de los 114 organismos (mismo patrón que el hallazgo de `fuero_simplificado`, ver §4). Con el enum en mayúsculas, la comparación `TIPOS_CON_TAXONOMIA.includes(tipo_oficina)` no matcheaba casi nunca, así que la excepción de la regla 2 no se aplicaba como estaba pensado.
+
+Corrección aplicada:
+- `TIPOS_CON_TAXONOMIA` pasa a minúsculas: `['oficina judicial', 'oficina judicial especializada']`.
+- La comparación se hace case-insensitive como defensa adicional: `TIPOS_CON_TAXONOMIA.includes((tipo_oficina || '').toLowerCase())`, para no volver a romperse si aparece algún valor en otro casing (como el único documento `PENAL` de §4).
 
 ---
 
@@ -107,15 +117,83 @@ Un organismo puede tener, además del `usuario_google` propietario, una lista `e
 - Nueva vista admin-only "Asignar Editores" (`/asignar-editores`), que agrupa organismos por provincia y permite agregar/quitar emails de la lista `editores` de cada uno.
 - `ListaOrganismosForm.jsx` ahora resuelve los organismos visibles para un usuario con dos queries en paralelo (`usuario_google == user.email` y `editores array-contains user.email`), deduplicadas por id.
 
+### 3.1.1 Migración de datos — `scripts/agregar-campo-editores.cjs`
+Script de una sola corrida (Firebase Admin SDK + `serviceAccountKey.json`) que agrega `editores: []` a todos los documentos de `organismos` que no tuvieran el campo, sin tocar los que ya lo tenían. Modos:
+- `node scripts/agregar-campo-editores.cjs` — aplica a todos los documentos.
+- `--dry-run` — solo lista los documentos a modificar, no escribe.
+- `--id=<documentId>` — limita la corrida a un documento puntual (combinable con `--dry-run`).
+
+Usa `batch.update` con el valor explícito `{ editores: [] }` en vez de `FieldValue.arrayUnion`, porque `arrayUnion` no sirve para crear el campo cuando no existe.
+
+### 3.1.2 `AsignarEditoresForm.jsx` — selección múltiple por provincia
+Flujo real del formulario:
+1. Carga todos los documentos de `organismos` una sola vez al montar.
+2. El usuario elige una provincia en un `<select>` (derivada de `organismo.provincia`, agrupando los que no tienen provincia bajo `"Sin provincia"`); recién ahí se muestra la lista de organismos de esa provincia.
+3. Cada organismo de la lista tiene un checkbox individual, más un checkbox "Seleccionar todos" que alterna todos los organismos filtrados de la provincia actual (usa un `Set` de ids seleccionados, no un array).
+4. Un único input de email + botón "Agregar a seleccionados" valida el formato (regex simple `^[^\s@]+@[^\s@]+\.[^\s@]+$`), y aplica `arrayUnion(email)` en paralelo (`Promise.all`) a todos los organismos tildados — no hay un input de email por organismo.
+5. Cada organismo listado muestra sus `editores` actuales con un botón "Quitar" individual por email, que aplica `arrayRemove(email)` sobre ese documento puntual.
+6. El estado local (`organismos`) se actualiza en el cliente tras cada operación exitosa, sin re-fetch completo de Firestore.
+7. Cambiar de provincia limpia la selección de checkboxes y el input de email en curso.
+
 ### 3.2 Nota de documentación retroactiva
 Esta sección se agrega el 2026-07-23, con posterioridad a la implementación, para cerrar el hueco de documentación: la funcionalidad ya estaba mergeada a `main` pero no tenía sección propia, en contra de la convención de este archivo.
 
-### 3.3 Pendiente de verificación — Firestore Security Rules
-El mensaje del commit `3587c06` incluye "security rules" entre sus cambios, pero no se encontró ningún archivo `firestore.rules` versionado en el repo. No está confirmado si:
-- (a) las reglas se configuraron manualmente en Firebase Console (fuera de control de versiones), o
-- (b) el mensaje del commit se refiere solo a la lógica de visibilidad del lado del cliente (las dos queries de 3.1), sin reglas server-side reales que impidan a un usuario no autorizado leer/escribir organismos ajenos.
+### 3.3 Firestore Security Rules [Confirmado]
+**Fecha de confirmación:** 2026-07-27
 
-**Acción pendiente:** verificar el estado real de las Firestore Security Rules del proyecto en Firebase Console antes de asumir que la validación de `usuario_google`/`editores` (o el rol admin de §1.6) está resuelta del lado del servidor.
+El mensaje del commit `3587c06` incluye "security rules" entre sus cambios, pero no se encontró ningún archivo `firestore.rules` versionado en el repo — viven únicamente en Firebase Console, fuera de control de versiones. Se pegó a continuación el contenido real vigente al 2026-07-27, copiado directamente de la consola, para cerrar la duda de §1.6/§5.2 sobre si la validación es real o solo client-side:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function esAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.keys().hasAll(['rol']) &&
+        'admin' in get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.rol;
+    }
+
+    function esOwnerOEditor(datos) {
+      return request.auth != null && (
+        request.auth.token.email == datos.usuario_google ||
+        (datos.keys().hasAll(['editores']) && request.auth.token.email in datos.editores)
+      );
+    }
+
+    match /organismos/{id} {
+      allow get, list: if esOwnerOEditor(resource.data) || esAdmin();
+      allow update, delete: if esOwnerOEditor(resource.data) || esAdmin();
+      allow create: if request.auth != null &&
+        request.resource.data.usuario_google == request.auth.token.email;
+
+      match /unidades_funcionales/{ufId} {
+        allow read, write: if esOwnerOEditor(get(/databases/$(database)/documents/organismos/$(id)).data) || esAdmin();
+      }
+      match /taxonomia/{taxId} {
+        allow read, write: if esOwnerOEditor(get(/databases/$(database)/documents/organismos/$(id)).data) || esAdmin();
+      }
+    }
+
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.token.email == userId || esAdmin();
+    }
+
+    match /localidades/{id} {
+      allow read: if request.auth != null;
+    }
+  }
+}
+```
+
+Puntos que esto resuelve:
+- `esAdmin()` y `esOwnerOEditor()` validan del lado del servidor exactamente lo que las pantallas ya asumían del lado del cliente: rol admin (duda de §1.6) y ownership/`editores` (duda original de esta sección).
+- `allow create` en `organismos` está separado de `get`/`list`/`update`/`delete` — se agregó hoy (2026-07-27) porque un documento nuevo todavía no tiene owner ni editores contra los cuales evaluar `esOwnerOEditor()`; la regla de creación solo exige que `usuario_google` del documento a crear coincida con el email autenticado.
+- Las subcolecciones `unidades_funcionales` y `taxonomia` heredan la misma validación, resolviendo también la duda de §1.6 sobre si esas lecturas/escrituras estaban protegidas.
+
+Punto que esto **no** resuelve — sigue abierto:
+- `allow create` no valida `provincia`. La restricción de §5.2 (admin puede elegir cualquier provincia, no-admin solo la propia) sigue siendo enforcement exclusivamente client-side: un usuario no-admin autenticado podría, en teoría, crear un organismo con cualquier `provincia` saltándose la UI. No hay urgencia asumida dado que los datos son públicos (mismo criterio que §1.6), pero queda anotado para cuando se revisen las rules de nuevo.
 
 ---
 
@@ -172,10 +250,116 @@ Campos: `denominacion`, `denominacion_simplificada` (select), `tipo_oficina` (se
 ### 5.2 Reglas de acceso a `provincia` (client-side)
 - Admin: `provincia` es un select editable con las 24 jurisdicciones (ver 5.3).
 - No-admin: se lee `provincia` de `users/{email}` (Firestore). Si existe, el campo queda fijo/no editable con ese valor. Si no existe, no se renderiza el formulario — se muestra un mensaje pidiendo que un admin le asigne provincia. Hoy no hay ningún formulario que cargue `provincia` en `users`, así que todo usuario no-admin ve ese mensaje hasta que se resuelva manualmente (ej. edición directa en Firestore) o se construya una pantalla para asignarla.
-- **Client-side únicamente** — mismo punto abierto que §1.6/§3.3: no hay Firestore Security Rules confirmadas que validen esto del lado del servidor.
+- **Client-side únicamente para `provincia`** — a diferencia de `usuario_google`/`editores`/rol admin (ya confirmados server-side, ver §3.3), la regla `allow create` de `organismos` no valida `provincia`. Ver el punto abierto al final de §3.3.
+- **Actualización 2026-07-28:** el formulario `GestionUsuariosForm.jsx` (§7) resuelve la carga de `users.provincia` — ahora el admin puede asignar y editar la provincia de cualquier usuario, lo que desbloquea la creación de organismos para todos los no-admins con provincia asignada. El enforcement server-side de `provincia` en `allow create` sigue pendiente (ver §3.3).
 
 ### 5.3 Catálogo de provincias (nuevo, hardcodeado)
 No existía ninguna lista canónica de las 24 jurisdicciones (provincias + CABA) en el código ni en Firestore — la colección `localidades` solo cubre 21 (le faltan La Rioja, Misiones y Santa Cruz, sin localidades cargadas aún). Se agregó `provinciaOptions` en `src/constants/organismoOptions.js`, respetando la ortografía ya usada en `localidades` (ej. "Entre Rios", "Rio Negro" sin tilde) para no introducir una grafía distinta que rompa agrupaciones por provincia en otras pantallas (mismo tipo de problema que tenía `fuero_simplificado`, ver §4).
 
 ### 5.4 Refactor: opciones de organismo a archivo compartido
 `denominacionSimplificadaOptions`, `tipoOficinaOptions` y `fueroOptions` estaban hardcodeadas dentro de `OrganismoForm.jsx`. Se movieron a `src/constants/organismoOptions.js` para reusarlas en `CrearOrganismoForm.jsx` sin duplicar el array de 39 denominaciones; `OrganismoForm.jsx` ahora las importa de ahí. Sin cambio de comportamiento.
+
+---
+
+## 6. Pools de jueces [Implementado]
+**Fecha:** 2026-07-28
+**Archivos:** `src/components/UnidadFuncionalForm.jsx`, `src/components/GestionOrganismosForm.jsx`, `src/components/ListaUnidadesFuncionalesForm.jsx`, `src/utils/juecesHelpers.js` (nuevo)
+
+### 6.1 Modelo de datos
+
+Nueva colección `pools_jueces` en Firestore:
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `descripcion` | string | Nombre o descripción del tribunal/pool |
+| `cantidad_jueces` | number | Cantidad de jueces que comparten este pool |
+| `provincia` | string | Provincia del pool (mismo valor que `organismos.provincia`) |
+
+Un documento de `unidades_funcionales` tiene dos modos mutuamente excluyentes para declarar jueces asistidos:
+
+| Modo | Campo poblado | Campo nulo |
+|---|---|---|
+| Cantidad directa | `jueces_asistidos` (número) | `pool_jueces_id: null` |
+| Pool | `pool_jueces_id` (id de doc en `pools_jueces`) | `jueces_asistidos: null` |
+
+### 6.2 Reglas de negocio
+
+- Cualquier usuario autenticado puede crear un pool si no existe el que necesita (se crea inline desde `UnidadFuncionalForm.jsx`, sin pantalla propia).
+- Un pool creado inline queda disponible inmediatamente para otras UFs de la misma provincia.
+- **Completitud:** si una UF tiene `pool_jueces_id` asignado, `evaluarUF()` en `GestionOrganismosForm.jsx` omite la validación de `jueces_asistidos` (no exige el campo ni valida que sea numérico). Se considera el campo resuelto por el pool. Sin `pool_jueces_id`, el comportamiento de completitud es el mismo que antes (ver §1.2 regla 3).
+
+### 6.3 Firestore Security Rules
+
+La colección `pools_jueces` tiene acceso restringido por provincia: solo pueden leer/crear/editar/borrar pools los usuarios cuya `provincia` en `users/{email}` coincida con la del pool, o los admin. Las rules agregadas:
+
+```
+function provinciaDelUsuario() {
+  return get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.provincia;
+}
+
+match /pools_jueces/{poolId} {
+  allow get, list: if request.auth != null &&
+    (resource.data.provincia == provinciaDelUsuario() || esAdmin());
+  allow create: if request.auth != null &&
+    (request.resource.data.provincia == provinciaDelUsuario() || esAdmin());
+  allow update, delete: if
+    resource.data.provincia == provinciaDelUsuario() || esAdmin();
+}
+```
+
+Como en §3.3, estas rules viven en Firebase Console y no están versionadas en el repo.
+
+### 6.4 UI
+
+**`UnidadFuncionalForm.jsx`** (pantalla de edición de UF):
+- Dos radio buttons: "Cantidad de jueces" (modo directo) y "Pool de jueces compartido".
+- En modo pool: `<select>` filtrado por `provincia` del organismo padre, con opción "+ Crear nuevo tribunal / pool" (`POOL_NUEVO = '__nuevo__'`). Si se elige crear nuevo, aparecen inputs de `descripcion` y `cantidad_jueces`.
+- Al guardar en modo pool con pool nuevo: crea el doc en `pools_jueces` y guarda `pool_jueces_id` en la UF. Al guardar con pool existente: guarda solo el `pool_jueces_id`. En cualquier caso, `jueces_asistidos` queda en `null`.
+- Al cargar una UF con `pool_jueces_id` ya asignado: el formulario arranca en modo pool con ese pool preseleccionado.
+
+**Helper compartido `src/utils/juecesHelpers.js`:**
+```js
+export function resolverJueces(uf, poolsMap) {
+  if (uf.pool_jueces_id) {
+    const cant = poolsMap?.get(uf.pool_jueces_id);
+    return cant != null ? `${cant} (pool)` : '(pool)';
+  }
+  return uf.jueces_asistidos != null && uf.jueces_asistidos !== ''
+    ? String(uf.jueces_asistidos)
+    : '—';
+}
+```
+
+**`GestionOrganismosForm.jsx`** (vista admin):
+- Fetch de `pools_jueces` en el `Promise.all` inicial (junto con `organismos` y `localidades`); se guarda en `poolsMap: Map<id, cantidad_jueces>`.
+- Acordeón: muestra `resolverJueces(uf, poolsMap)` en lugar de `uf.jueces_asistidos`. El indicador rojo solo aparece si no hay pool ni valor directo.
+- Export PDF: columna "Jueces" agregada a la tabla de UFs (entre "Tipo UF" y "Estado").
+
+**`ListaUnidadesFuncionalesForm.jsx`** (tarjeta de UF):
+- Fetch de `pools_jueces` en paralelo con `localidades` al cargar.
+- Tarjeta muestra `resolverJueces(uf, poolsMap)` en lugar de `uf.jueces_asistidos`.
+
+---
+
+## 7. Gestión de usuarios [Implementado]
+**Fecha:** 2026-07-28
+**Archivos:** `src/components/GestionUsuariosForm.jsx` (nuevo), `src/App.jsx`, `src/components/MenuPage.jsx`
+
+### 7.1 Alcance
+
+Nueva pantalla admin-only en `/gestion-usuarios` que centraliza la gestión de documentos en la colección `users`. Resuelve la deuda anotada en §5.2: hasta ahora no había formulario para cargar `users.provincia`, bloqueando la creación de organismos para todos los no-admins.
+
+### 7.2 Funcionalidad
+
+**Sección 1 — Usuarios existentes:**
+- Lista todos los documentos de `users`, ordenados por email.
+- Por cada usuario: checkboxes de rol (`usuario_normal`, `admin`) + select de `provincia` (del catálogo `provinciaOptions`, §5.3) + botón "Guardar".
+- Guardar aplica `updateDoc` con `{ rol: [...Set], provincia }`. El estado local se actualiza sin re-fetch.
+
+**Sección 2 — Dar de alta un usuario nuevo:**
+- Formulario con email, rol (checkboxes) y provincia (select). Los tres son obligatorios; email debe ser único en la colección.
+- Usa `setDoc(doc(db, 'users', email), { email, rol, provincia })` — el id del documento es el email del usuario.
+- Requerimiento de `provincia` al dar de alta: soluciona el caso en que un usuario acceda por primera vez antes de que el admin le haya creado el documento.
+
+### 7.3 Nota de acceso
+`GestionUsuariosForm.jsx` no verifica ni modifica contraseñas ni la identidad de Firebase Auth — solo gestiona el documento Firestore `users/{email}` que controla el rol y la provincia. La creación del usuario en Auth ocurre cuando el propio usuario inicia sesión por primera vez con Google.

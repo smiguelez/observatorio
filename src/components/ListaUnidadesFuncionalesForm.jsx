@@ -5,11 +5,13 @@ import { db } from '../firebase';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader } from './ui/card';
 import UnidadFuncionalForm from './UnidadFuncionalForm';
+import { resolverJueces } from '@/utils/juecesHelpers';
 
 export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) {
   const [unidades, setUnidades] = useState([]);
   const [organismo, setOrganismo] = useState(null);
   const [localidades, setLocalidades] = useState([]);
+  const [poolsMap, setPoolsMap] = useState(new Map());
   const [editandoUF, setEditandoUF] = useState(null);
 
   const fetchDatos = async () => {
@@ -26,12 +28,16 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
     const listaUF = ufSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     setUnidades(listaUF);
 
-    const locSnap = await getDocs(collection(db, 'localidades'));
+    const [locSnap, poolSnap] = await Promise.all([
+      getDocs(collection(db, 'localidades')),
+      getDocs(collection(db, 'pools_jueces')),
+    ]);
     const listaLoc = locSnap.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .filter(loc => loc.provincia === org.provincia)
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
     setLocalidades(listaLoc);
+    setPoolsMap(new Map(poolSnap.docs.map(d => [d.id, d.data().cantidad_jueces])));
   };
 
   useEffect(() => {
@@ -98,7 +104,7 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
                 Denominación: <strong>{uf.denominacion_unidad || '—'}</strong><br />
                 Tipo de Unidad Funcional: {uf.tipo_uf || '-'}<br />
                 Año de implementación: {uf.anio_implementacion || '—'}<br />
-                Jueces asistidos: {uf.jueces_asistidos || '—'}<br />
+                Jueces asistidos: {resolverJueces(uf, poolsMap)}<br />
                 Responsable: {uf.responsable || '—'}<br />
                 Correo: {uf.mail || '—'}<br />
                 Teléfono: {uf.telefono || '—'}<br />
@@ -130,6 +136,7 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
       {editandoUF && (
         <UnidadFuncionalForm
           organismoId={organismoId}
+          provincia={organismo?.provincia}
           localidades={localidades}
           editandoUF={editandoUF}
           onUnidadFuncionalGuardada={fetchDatos}

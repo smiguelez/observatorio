@@ -5,15 +5,20 @@ import {
   doc,
   updateDoc,
   serverTimestamp,
-  getDoc
+  getDoc,
+  getDocs,
+  query,
+  where
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
-import OrganismoForm from './ListaUnidadesFuncionalesForm';
+
+const POOL_NUEVO = '__nuevo__';
 
 export default function UnidadFuncionalForm({
   organismoId,
+  provincia,
   localidades,
   editandoUF,
   onUnidadFuncionalGuardada,
@@ -31,6 +36,12 @@ export default function UnidadFuncionalForm({
     responsable: '',
     codigo_postal: ''
   });
+
+  const [modoJueces, setModoJueces] = useState('cantidad');
+  const [pools, setPools] = useState([]);
+  const [poolSeleccionado, setPoolSeleccionado] = useState('');
+  const [nuevoPoolDescripcion, setNuevoPoolDescripcion] = useState('');
+  const [nuevoPoolCantidad, setNuevoPoolCantidad] = useState('');
 
   const formRef = useRef(null);
 
@@ -50,12 +61,42 @@ export default function UnidadFuncionalForm({
         codigo_postal: editandoUF.codigo_postal || ''
       });
 
+      if (editandoUF.pool_jueces_id) {
+        setModoJueces('pool');
+        setPoolSeleccionado(editandoUF.pool_jueces_id);
+      } else {
+        setModoJueces('cantidad');
+        setPoolSeleccionado('');
+      }
+      setNuevoPoolDescripcion('');
+      setNuevoPoolCantidad('');
+
       // Scroll al formulario al iniciar edición/creación
       setTimeout(() => {
         formRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
     }
   }, [editandoUF]);
+
+  useEffect(() => {
+    if (!provincia) {
+      setPools([]);
+      return;
+    }
+
+    const fetchPools = async () => {
+      try {
+        const snap = await getDocs(
+          query(collection(db, 'pools_jueces'), where('provincia', '==', provincia))
+        );
+        setPools(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (error) {
+        console.error('Error al cargar pools de jueces:', error);
+      }
+    };
+
+    fetchPools();
+  }, [provincia]);
 
   const handleChange = (e) => {
     setNuevaUF({ ...nuevaUF, [e.target.name]: e.target.value });
@@ -69,22 +110,57 @@ export default function UnidadFuncionalForm({
       return;
     }
 
+    if (modoJueces === 'pool') {
+      if (!poolSeleccionado) {
+        alert("Seleccioná un tribunal / pool, o creá uno nuevo.");
+        return;
+      }
+      if (poolSeleccionado === POOL_NUEVO && (!nuevoPoolDescripcion || !nuevoPoolCantidad)) {
+        alert("Completá la descripción y la cantidad de jueces del nuevo tribunal / pool.");
+        return;
+      }
+    }
+
     try {
+      let poolIdFinal = null;
+      let juecesAsistidosFinal = null;
+
+      if (modoJueces === 'pool') {
+        if (poolSeleccionado === POOL_NUEVO) {
+          const nuevoPoolRef = await addDoc(collection(db, 'pools_jueces'), {
+            descripcion: nuevoPoolDescripcion,
+            cantidad_jueces: Number(nuevoPoolCantidad),
+            provincia
+          });
+          poolIdFinal = nuevoPoolRef.id;
+        } else {
+          poolIdFinal = poolSeleccionado;
+        }
+      } else {
+        juecesAsistidosFinal = nuevaUF.jueces_asistidos;
+      }
+
+      const payload = {
+        ...nuevaUF,
+        jueces_asistidos: juecesAsistidosFinal,
+        pool_jueces_id: poolIdFinal
+      };
+
       if (editandoUF && editandoUF.id) {
         // Modo edición
         const ref = doc(
           db,
           `organismos/${organismoId}/unidades_funcionales/${editandoUF.id}`
         );
-        await updateDoc(ref, nuevaUF);
-        console.log("✅ UF actualizada:", nuevaUF);
+        await updateDoc(ref, payload);
+        console.log("✅ UF actualizada:", payload);
       } else {
         // Modo creación
         await addDoc(
           collection(db, `organismos/${organismoId}/unidades_funcionales`),
-          nuevaUF
+          payload
         );
-        console.log("✅ UF agregada:", nuevaUF);
+        console.log("✅ UF agregada:", payload);
       }
 
       await actualizarActualizadoA();
@@ -199,17 +275,95 @@ export default function UnidadFuncionalForm({
             />
           </div>
 
-          <div>
-            <label htmlFor="jueces_asistidos" className="block text-sm font-medium text-gray-700">
-              Jueces Asistidos:
-            </label>
-            <Input
-              id="jueces_asistidos"
-              name="jueces_asistidos"
-              value={nuevaUF.jueces_asistidos}
-              onChange={handleChange}
-              placeholder="Jueces Asistidos"
-            />
+          <div className="md:col-span-2 space-y-3">
+            <span className="block text-sm font-medium text-gray-700">Jueces Asistidos:</span>
+
+            <div className="flex gap-4">
+              <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none">
+                <input
+                  type="radio"
+                  name="modo_jueces"
+                  checked={modoJueces === 'cantidad'}
+                  onChange={() => setModoJueces('cantidad')}
+                  className="accent-blue-600"
+                />
+                Cantidad de jueces
+              </label>
+              <label
+                className={`flex items-center gap-1.5 text-sm cursor-pointer select-none ${
+                  provincia ? 'text-gray-700' : 'text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="modo_jueces"
+                  checked={modoJueces === 'pool'}
+                  disabled={!provincia}
+                  onChange={() => setModoJueces('pool')}
+                  className="accent-blue-600"
+                />
+                Asociar a tribunal / pool
+              </label>
+            </div>
+
+            {modoJueces === 'cantidad' && (
+              <Input
+                id="jueces_asistidos"
+                name="jueces_asistidos"
+                value={nuevaUF.jueces_asistidos}
+                onChange={handleChange}
+                placeholder="Jueces Asistidos"
+              />
+            )}
+
+            {modoJueces === 'pool' && (
+              !provincia ? (
+                <p className="text-sm text-gray-400 italic">Cargando provincia del organismo...</p>
+              ) : (
+                <div className="space-y-3">
+                  <select
+                    id="pool_jueces_id"
+                    value={poolSeleccionado}
+                    onChange={e => setPoolSeleccionado(e.target.value)}
+                    className="w-full border px-3 py-2 rounded text-sm"
+                  >
+                    <option value="">Seleccionar tribunal / pool</option>
+                    {pools.map(p => (
+                      <option key={p.id} value={p.id}>{p.descripcion}</option>
+                    ))}
+                    <option value={POOL_NUEVO}>+ Crear nuevo tribunal / pool</option>
+                  </select>
+
+                  {poolSeleccionado === POOL_NUEVO && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="nuevo_pool_descripcion" className="block text-sm font-medium text-gray-700">
+                          Descripción del tribunal / pool:
+                        </label>
+                        <Input
+                          id="nuevo_pool_descripcion"
+                          value={nuevoPoolDescripcion}
+                          onChange={e => setNuevoPoolDescripcion(e.target.value)}
+                          placeholder="Descripción"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="nuevo_pool_cantidad" className="block text-sm font-medium text-gray-700">
+                          Cantidad de jueces del pool:
+                        </label>
+                        <Input
+                          id="nuevo_pool_cantidad"
+                          type="number"
+                          value={nuevoPoolCantidad}
+                          onChange={e => setNuevoPoolCantidad(e.target.value)}
+                          placeholder="Cantidad de jueces"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            )}
           </div>
 
           <div>

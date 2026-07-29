@@ -42,6 +42,7 @@ export default function UnidadFuncionalForm({
   const [poolSeleccionado, setPoolSeleccionado] = useState('');
   const [nuevoPoolDescripcion, setNuevoPoolDescripcion] = useState('');
   const [nuevoPoolCantidad, setNuevoPoolCantidad] = useState('');
+  const [guardando, setGuardando] = useState(false);
 
   const formRef = useRef(null);
 
@@ -105,6 +106,8 @@ export default function UnidadFuncionalForm({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (guardando) return;
+
     if (!nuevaUF.denominacion_unidad || !nuevaUF.localidad_id) {
       alert("Por favor, completá los campos obligatorios.");
       return;
@@ -121,6 +124,7 @@ export default function UnidadFuncionalForm({
       }
     }
 
+    setGuardando(true);
     try {
       let poolIdFinal = null;
       let juecesAsistidosFinal = null;
@@ -177,6 +181,8 @@ export default function UnidadFuncionalForm({
     } catch (error) {
       console.error("❌ Error guardando UF:", error);
       alert(`Error guardando la unidad funcional: ${error.message}`);
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -437,8 +443,8 @@ export default function UnidadFuncionalForm({
         </div>
 
         <div className="mt-6 flex gap-4">
-          <Button type="submit">
-            {editandoUF.id ? 'Guardar Cambios' : 'Agregar Unidad Funcional'}
+          <Button type="submit" disabled={guardando}>
+            {guardando ? 'Guardando...' : (editandoUF.id ? 'Guardar Cambios' : 'Agregar Unidad Funcional')}
           </Button>
           <Button
             type="button"

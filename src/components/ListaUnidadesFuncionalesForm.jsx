@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Building2 } from 'lucide-react';
-import { collection, getDocs, doc, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader } from './ui/card';
 import UnidadFuncionalForm from './UnidadFuncionalForm';
 import { resolverJueces } from '@/utils/juecesHelpers';
+import { provinciaOptions } from '@/constants/organismoOptions';
 
 export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) {
   const [unidades, setUnidades] = useState([]);
@@ -21,7 +22,11 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
     const docSnap = await getDoc(docRef);
     if (!docSnap.exists()) return;
 
-    const org = { id: docSnap.id, ...docSnap.data() };
+    const provinciaRaw = (docSnap.data().provincia || '').trim();
+    const provinciaCanonica = provinciaOptions.find(
+      p => p.toLowerCase() === provinciaRaw.toLowerCase()
+    ) || provinciaRaw;
+    const org = { id: docSnap.id, ...docSnap.data(), provincia: provinciaCanonica };
     setOrganismo(org);
 
     const ufSnap = await getDocs(collection(db, `organismos/${organismoId}/unidades_funcionales`));
@@ -30,11 +35,11 @@ export default function ListaUnidadesFuncionalesForm({ organismoId, onVolver }) 
 
     const [locSnap, poolSnap] = await Promise.all([
       getDocs(collection(db, 'localidades')),
-      getDocs(collection(db, 'pools_jueces')),
+      getDocs(query(collection(db, 'pools_jueces'), where('provincia', '==', org.provincia))),
     ]);
     const listaLoc = locSnap.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
-      .filter(loc => loc.provincia === org.provincia)
+      .filter(loc => (loc.provincia || '').trim().toLowerCase() === (org.provincia || '').toLowerCase())
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
     setLocalidades(listaLoc);
     setPoolsMap(new Map(poolSnap.docs.map(d => [d.id, d.data().cantidad_jueces])));

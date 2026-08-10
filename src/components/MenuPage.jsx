@@ -21,7 +21,7 @@ export default function MenuPage({ isAdmin }) {
         to="/reportes"
         className="bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700"
       >
-        Reporte PowerBI
+        Tablero - Reporte
       </Link>
 
       <Link

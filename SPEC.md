@@ -363,3 +363,20 @@ Nueva pantalla admin-only en `/gestion-usuarios` que centraliza la gestión de d
 
 ### 7.3 Nota de acceso
 `GestionUsuariosForm.jsx` no verifica ni modifica contraseñas ni la identidad de Firebase Auth — solo gestiona el documento Firestore `users/{email}` que controla el rol y la provincia. La creación del usuario en Auth ocurre cuando el propio usuario inicia sesión por primera vez con Google.
+
+---
+
+## 8. Deuda técnica anotada — ReportesPage.jsx (sandbox de iframe)
+**Fecha:** 2026-08-10
+
+El embed de Data Studio en `src/components/ReportesPage.jsx` usa:
+
+```
+sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-storage-access-by-user-activation"
+```
+
+La combinación `allow-scripts` + `allow-same-origin` es la marcada como riesgosa en la documentación de sandboxing de iframes: le da al contenido embebido capacidad de ejecutar JS y acceder al origin del padre a la vez. Generado sin revisión explícita del motivo de cada flag.
+
+**Decisión:** postergado — el iframe apunta a un dashboard de datos públicos propio (Data Studio/Looker Studio), no hay input de credenciales de terceros de por medio, riesgo asumido bajo.
+
+**Pendiente:** revisar si esta combinación es realmente necesaria para que el embed de Data Studio funcione, o si se puede acotar (en particular, evaluar si `allow-same-origin` es requerido por Data Studio o si se puede eliminar sin romper el embed).

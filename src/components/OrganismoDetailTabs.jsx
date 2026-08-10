@@ -26,7 +26,7 @@ const tieneDatosTaxonomia = (taxonomia) => {
   if (!taxonomia || !taxonomia.v1) return false;
 
   return Object.values(taxonomia.v1).some((bloque) => {
-    return Object.values(bloque).some((valor) => valor && valor.trim() !== "");
+    return Object.values(bloque).some((valor) => typeof valor === "string" && valor.trim() !== "");
   });
 };
 

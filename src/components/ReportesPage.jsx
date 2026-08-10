@@ -3,13 +3,13 @@ import React from 'react';
 export default function ReportesPage() {
   return (
     <div
-      className="shadow-lg rounded-lg overflow-hidden border border-blue-200"
+      className="reportes-container shadow-lg rounded-lg overflow-hidden border border-blue-200"
       style={{ height: 'calc(100vh - 120px)' }}
     >
       <iframe
         width="100%"
         height="100%"
-        src="https://datastudio.google.com/embed/reporting/c3658d7d-bf21-44ca-a987-ab6868d7d6e7/page/p_z5e672l95d"
+        src="https://datastudio.google.com/embed/reporting/c3658d7d-bf21-44ca-a987-ab6868d7d6e7/page/p_4z6gkh1c6d"
         frameBorder="0"
         style={{ border: 0, display: 'block' }}
         allowFullScreen

@@ -49,7 +49,7 @@ export const tipoOficinaOptions = [
   "unidad operativa"
 ];
 
-export const fueroOptions = ["penal", "civil", "familia", "laboral"];
+export const fueroOptions = ["penal", "civil", "familia", "laboral", "multifuero"];
 
 // No hay colección de Firestore con el listado completo de provincias
 // (la colección `localidades` solo cubre las provincias que ya tienen

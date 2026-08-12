@@ -386,6 +386,7 @@ export default function UnidadFuncionalForm({
               <option value="">Seleccionar Tipo de UF</option>
               <option value="Delegación">Delegación</option>
               <option value="Subdelegación">Subdelegación</option>
+              <option value="Área Específica">Área Específica</option>
             </select>
           </div>
 

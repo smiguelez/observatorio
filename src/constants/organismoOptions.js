@@ -1,45 +1,19 @@
 // src/constants/organismoOptions.js
 
+// Catálogo cerrado de 10 valores (migración de datos ya aplicada en Firestore
+// a los 116 organismos existentes, ver SPEC.md). Reemplaza al listado anterior
+// de 39 valores hardcodeados en mayúsculas.
 export const denominacionSimplificadaOptions = [
-  "OFICINA JUDICIAL",
-  "OFICINA DE IMPUGNACIÓN",
-  "DIRECCION GRAL DE OFICINAS JUDICIALES",
-  "OFICINA DE TRAMITACION INTEGRAL",
-  "COORDINACION OFICINAS JUDICIALES",
-  "OFICINA DE GESTIÓN DE AUDIENCIAS",
-  "OFICINA DE GESTIÓN UNICA",
-  "OFICINA JUDICIAL CENTRAL",
-  "OFICINA JUDICIAL DE JUICIO POR JURADOS",
-  "OFICINA DE GESTIÓN UNIFICADA",
-  "TRIBUNAL DE GESTIÓN ASOCIADA",
-  "OFICINA DE PROCESOS",
-  "OFICINA DE TRAMITES",
-  "OFICINA GESTIÓN Y APOYO",
-  "OFICINA DE GESTIÓN JUDICIAL",
-  "OFICINA DE RECEPCIÓN DE EXPEDIENTES",
-  "MESA ENTRADAS",
-  "OFICINA DE COORDINACIÓN",
-  "OFICINA UNICA",
-  "OFICINA DE ATENCIÓN CENTRALIZADA",
-  "OFICINA DE ENTRADA",
-  "UNIDAD DE SEGUIMIENTO",
-  "UNIDAD DE COORDINACIÓN",
-  "OFICINA DE SERVICIOS PROCESALES",
-  "OFICINA DE JURADOS",
-  "OFICINA DE GESTIÓN COMUN",
-  "OFICINA DE PROCESOS SUCESORIOS",
-  "SECRETARIA DE GESTIÓN ADMINISTRATIVA",
-  "OFICINA DE GESTIÓN ADMINISTRATIVA",
-  "OFICINA JUDICIAL DE GESTIÓN ASOCIADA",
-  "GESTIÓN JUDICIAL ASOCIADA",
-  "OFICINA JUDICIAL DE AUDIENCIAS",
-  "OFICINA CENTRAL DE JUICIOS POR JURADOS",
-  "OFICINA DE GESTION ASOCIADA",
-  "COORDINACION OGA",
-  "OFICINA DE COORDINACION ESTRATEGICA DE PLANIFICACION Y GESTION",
-  "OFICINA DE GESTION JUDICIAL",
-  "OFICINA DE GESTIÓN DIGITAL",
-  "COMISIÓN TÉCNICA"
+  "Oficina Judicial",
+  "Oficina de Gestión Asociada",
+  "Oficina de Tramitación Integral",
+  "Oficina de Gestión de Audiencias",
+  "Oficina de Juicio por Jurados",
+  "Oficina Judicial Especializada",
+  "Oficina de Medidas Alternativas y Conciliación",
+  "Dirección o Coordinación General de Oficinas Judiciales",
+  "Mesa de Entradas Centralizada",
+  "Unidad de Servicios Procesales"
 ];
 
 export const tipoOficinaOptions = [

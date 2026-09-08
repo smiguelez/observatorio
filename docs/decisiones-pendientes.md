@@ -63,8 +63,14 @@ de autenticación coexistiendo, mantener el email como clave primaria es más
 frágil que antes — un mismo usuario puede tener el mismo email verificado por
 distintos proveedores, y un id subrogado interno (serial o UUID) con el email
 como columna `unique` separa mejor "quién es el usuario" de "cómo probó
-quién es". Depende también del resultado de V1.1 (colisiones de email por
-casing). Se cierra al diseñar el modelo de datos.
+quién es".
+
+*Resultado de V1.1 (2026-09):* 0 colisiones de email por casing en los datos
+actuales — 46 de 46 ids son emails válidos en minúscula, sin mismatches
+contra el campo `email`. La recomendación de id subrogado ya no se apoya en
+limpieza de datos existentes (no hay nada que limpiar): es una decisión de
+diseño hacia adelante, motivada por Principio V (identidad unificada), no por
+un problema encontrado en los datos.
 
 ---
 
@@ -73,3 +79,33 @@ El servidor está en un data center, pero no está definido si Cloudflare
 Tunnel forma parte de la topología nueva, ni cómo se despliega el frontend
 (¿sigue en Vercel? ¿pasa al servidor propio?). No bloquea el modelo de datos;
 sí bloquea las specs de backend y frontend.
+
+---
+
+**D6 — Tercer estado para UF sin jueces asignados: RESUELTA (2026-09).**
+El modelo actual asume que toda UF está en modo "cantidad directa"
+(`jueces_asistidos` poblado) o modo "pool" (`pool_jueces_id` poblado),
+mutuamente excluyentes. La verificación V3.3 encontró 2 UF (de 277) sin
+ninguno de los dos poblados — identificadas como la única UF de organismos
+puramente administrativos ("Secretaria de gestión administrativa", "Oficina
+de Gestión Digital"), confirmado por Santi.
+
+No es dato faltante: es un caso legítimo que el modelo original no
+contemplaba. El modelo relacional agrega un tercer estado explícito —
+`no_aplica` (o equivalente) — junto a cantidad directa y pool, para UF de
+organismos sin jueces asignados por diseño.
+
+---
+
+**D7 — `anio_implementacion`: formato libre e inconsistente.**
+V3.7 encontró texto libre real, no solo años: fechas completas
+(`"1/7/2021"`), texto descriptivo (`"2015. Refuncionalización 2024"`), un
+valor sin sentido como año (`"9"`), y una cadena vacía — 14 casos de 277 UF
+con formato no estándar, más 1 completamente ausente.
+
+Recomendación: dos columnas en vez de una — `anio_implementacion` (integer,
+nullable, con el año extraído donde se pueda parsear con confianza) y
+`anio_implementacion_texto_original` (text, preserva el valor tal cual para
+los casos que no parseen limpio). Evita perder el dato real por forzarlo a un
+tipo que no le cabe (Principio VII). Pendiente de confirmar con Santi antes
+de `/speckit-plan`.

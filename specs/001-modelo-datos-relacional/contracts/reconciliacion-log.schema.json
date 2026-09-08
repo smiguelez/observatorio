@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://observatorio/specs/001-modelo-datos-relacional/reconciliacion-log.schema.json",
+  "title": "Log de reconciliación de migración",
+  "description": "Contrato del artefacto de reconciliación que la migración produce por corrida (Principio X, FR-031/032, SC-008). Cada entrada compara conteo de origen (Firestore) con conteo de destino (PostgreSQL) por entidad. Se persiste además en la tabla migracion_reconciliacion.",
+  "type": "object",
+  "required": ["corrida_a", "entradas"],
+  "additionalProperties": false,
+  "properties": {
+    "corrida_a": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Instante de la corrida de reconciliación (UTC, ISO 8601)."
+    },
+    "origen": {
+      "type": "string",
+      "description": "Identificación del origen (p. ej. proyecto Firestore) en modo solo-lectura.",
+      "default": "firestore:observatorio"
+    },
+    "entradas": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/entrada" }
+    }
+  },
+  "$defs": {
+    "entrada": {
+      "type": "object",
+      "required": ["entidad", "conteo_origen", "conteo_destino", "resultado"],
+      "additionalProperties": false,
+      "properties": {
+        "entidad": {
+          "type": "string",
+          "description": "Nombre lógico de la entidad migrada.",
+          "enum": [
+            "usuarios",
+            "usuario_roles",
+            "organismos",
+            "organismo_editores",
+            "organismo_fueros",
+            "unidades_funcionales",
+            "localidades",
+            "pools_jueces",
+            "evaluaciones_taxonomicas"
+          ]
+        },
+        "conteo_origen": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Filas contadas en Firestore para esta entidad."
+        },
+        "conteo_destino": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Filas contadas en PostgreSQL para esta entidad."
+        },
+        "resultado": {
+          "type": "string",
+          "enum": ["coincide", "discrepancia_resuelta", "discrepancia_abierta"],
+          "description": "coincide: conteos iguales. discrepancia_abierta: la migración de esta entidad DEBE detenerse (FR-032). discrepancia_resuelta: hubo diferencia y quedó explicada en 'detalle'."
+        },
+        "detalle": {
+          "type": ["string", "null"],
+          "description": "Nota de resolución obligatoria cuando resultado != 'coincide'."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "resultado": { "const": "coincide" } } },
+          "then": {
+            "description": "Cuando coincide, los conteos deben ser iguales.",
+            "properties": {
+              "conteo_origen": { "$comment": "== conteo_destino (validado por la herramienta)" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "resultado": { "enum": ["discrepancia_resuelta", "discrepancia_abierta"] } }
+          },
+          "then": { "required": ["detalle"] }
+        }
+      ]
+    }
+  }
+}

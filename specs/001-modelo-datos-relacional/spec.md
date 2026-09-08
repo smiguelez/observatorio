@@ -26,10 +26,17 @@ Insumos de esta especificación:
   existentes en Firestore.
 - `docs/decisiones-pendientes.md` — decisiones cerradas que aplican al modelo
   (D3: fueros como listado con `fuero_simplificado` calculado; D4: identidad de
-  usuario con id subrogado).
-- `docs/verificacion-datos-firestore.md` — verificaciones sobre los datos reales
-  que condicionan nulidad, tipos canónicos y limpieza de referencias (Principio
-  VII de la constitución).
+  usuario con id subrogado; D7: `anio_implementacion` como año entero nullable;
+  D8: relación UF↔jueces por tabla puente de asignaciones a grupos, con cantidad
+  y fuero por fila, que reemplaza el modelo de tres estados de D6).
+- `docs/verificacion-datos-firestore.md` — script de verificaciones sobre los
+  datos reales que condiciona nulidad, tipos canónicos y limpieza de referencias
+  (Principio VII de la constitución).
+- `docs/resultado-verificacion-general-20260907.md` y
+  `docs/resultado-verificacion-fueros-20260907.md` — **resultados fechados** de
+  correr esas verificaciones sobre producción (2026-09-07). Reemplazan toda
+  estimación previa: los conteos, tipos y referencias rotas de esta spec salen de
+  ahí, no de supuestos.
 - `.specify/memory/constitution.md` — Principios V, VII, VIII, IX y X gobiernan
   directamente esta feature.
 
@@ -67,6 +74,17 @@ queda declarada como relación explícita del modelo.
    código muerto o legado (p. ej. estructura de versionado `v1` de taxonomía),
    **When** se revisa el modelo, **Then** existe una decisión explícita de
    incluirlo, transformarlo o descartarlo, con su razón.
+4. **Given** una UF que atiende varios grupos de jueces a la vez (p. ej. un pool
+   compartido, un grupo exclusivo propio y un subconjunto numérico de otro pool),
+   **When** se revisa el modelo, **Then** la relación UF↔jueces se expresa como
+   asignaciones independientes en una tabla puente —una cantidad por fila, sin
+   límite de una sola asignación por UF— capaces de representar los cinco casos de
+   D8, y la ausencia de asistencia de jueces se expresa como cero asignaciones.
+5. **Given** el ejemplo de D8 —UF1 con 5 jueces exclusivos + pool A completo (5,
+   compartido con UF2) + subconjunto de 3 del pool B (10, que UF3 usa completo)—,
+   **When** se calculan totales sobre el modelo, **Then** el conteo por UF da
+   13 / 5 / 10 (sumando las asignaciones de cada UF sin deduplicar) y el agregado
+   da 20 (cada grupo contado una sola vez por su total real: 5 + 5 + 10), nunca 28.
 
 ---
 
@@ -106,32 +124,40 @@ como respaldo.
 ### User Story 3 - Integridad referencial explícita, sin datos huérfanos (Priority: P2)
 
 Como equipo del proyecto, necesito que las relaciones que hoy son referencias
-sueltas se conviertan en relaciones con integridad garantizada, y que las
-referencias rotas se resuelvan antes de cargar los datos, para que una referencia
-inválida deje de degradar silenciosamente y pase a ser imposible por diseño.
+sueltas se conviertan en relaciones con integridad garantizada, para que una
+referencia inválida deje de ser posible por diseño en vez de degradar
+silenciosamente. La verificación fechada del 2026-09-07 encontró **0 referencias
+rotas** en los datos actuales (116 organismos, 277 UF), por lo que la carga no
+requiere limpieza previa de referencias: la garantía se impone hacia adelante.
 
 **Why this priority**: depende de que el modelo (US1) y los datos (US2) existan.
-Hoy una referencia rota muestra el id crudo o `'(pool)'` sin cantidad; en el
-modelo nuevo esa fila no debe poder existir (Principio VIII).
+Hoy una referencia rota mostraría el id crudo o `'(pool)'` sin cantidad; en el
+modelo nuevo esa fila no debe poder existir (Principio VIII). Que hoy no haya
+ninguna rota no debilita la restricción: la evita para siempre.
 
 **Independent Test**: se puede validar verificando que, en el destino, no existe
 ninguna referencia que apunte a un registro inexistente en ninguna de las
-relaciones del modelo, y que las referencias rotas detectadas en la verificación
-tienen una decisión de resolución registrada (limpieza o mapeo) aplicada antes de
+relaciones del modelo. Como la verificación de origen ya reportó 0 referencias
+rotas (V1.10, V2.13, V3.9, V3.10, V3.11), no hay decisiones de limpieza previa que
+aplicar; si una corrida futura detectara alguna, tendría que resolverse antes de
 la carga.
 
 **Acceptance Scenarios**:
 
-1. **Given** una unidad funcional con `localidad_id` que no existe en
-   `localidades` (detectada por la verificación V3.9), **When** corre la
-   migración, **Then** esa referencia se resuelve (se corrige o se mapea) antes de
-   la carga y no se carga ningún registro huérfano.
-2. **Given** un organismo cuyo propietario o cuyos editores referencian a un
-   usuario que no existe (V1.10 / V2.13), **When** corre la migración, **Then** la
-   referencia se resuelve antes de la carga.
+1. **Given** que la verificación V3.9/V3.10 reportó 0 UF con `localidad_id` o
+   `pool_jueces_id` roto, **When** corre la migración, **Then** todas las UF cargan
+   con su localidad y con sus asignaciones de jueces resueltas a grupos existentes,
+   y no se genera ningún registro huérfano.
+2. **Given** que la verificación V1.10/V2.13 reportó 0 organismos con propietario o
+   editores apuntando a un usuario inexistente, **When** corre la migración,
+   **Then** todas las referencias de propiedad y edición resuelven a un usuario
+   existente sin limpieza previa.
 3. **Given** el conjunto de datos migrado, **When** se recorren todas las
    relaciones del modelo, **Then** cero referencias apuntan a registros
    inexistentes.
+4. **Given** una hipotética referencia rota detectada en una corrida futura de la
+   verificación, **When** corre la migración, **Then** el modelo la rechaza por
+   integridad referencial y la referencia debe resolverse antes de la carga.
 
 ---
 
@@ -145,12 +171,16 @@ importar cómo probó su identidad.
 
 **Why this priority**: es la decisión D4 cerrada y el Principio V (identidad
 unificada). Habilita que backend y autenticación (features posteriores) se
-construyan sin volver a modelar la identidad.
+construyan sin volver a modelar la identidad. La verificación V1.1 confirmó que la
+elección de id subrogado sobre email **no responde a un problema en los datos
+actuales** (0 colisiones de email): es una decisión de diseño hacia adelante para
+soportar múltiples métodos de auth, no una limpieza — en `users` no hay nada que
+limpiar.
 
 **Independent Test**: se puede validar verificando que toda referencia de
 propiedad (`usuario_google`) y edición (`editores[]`) del modelo migrado apunta al
 id subrogado de un usuario existente, no a un email, y que no hay dos usuarios
-activos con el mismo email tras la normalización de casing.
+activos con el mismo email.
 
 **Acceptance Scenarios**:
 
@@ -164,10 +194,11 @@ activos con el mismo email tras la normalización de casing.
    emails, **When** se migra, **Then** queda expresada como relación entre
    organismos y usuarios (por id subrogado), sin duplicados y sin diferencias de
    casing.
-4. **Given** dos entradas de usuario con el mismo email en distinto casing
-   (colisión detectada por V1.1), **When** se migra, **Then** se resuelven a una
-   única identidad según la decisión de normalización registrada, y el email queda
-   único en el destino.
+4. **Given** que la verificación V1.1 no encontró ninguna colisión de email por
+   casing (0 de 46 usuarios: los 46 ids son emails válidos en minúscula que
+   coinciden con el campo `email`), **When** se migra, **Then** cada email produce
+   una identidad única sin necesidad de fusionar registros; la restricción de email
+   único se mantiene por diseño para altas futuras.
 
 ---
 
@@ -211,40 +242,67 @@ dos estados de migración cuando no.
 
 ### Edge Cases
 
-- **Referencias rotas.** `localidad_id` o `pool_jueces_id` que apuntan a
-  registros inexistentes (V3.9, V3.10); propietario/editores que apuntan a
-  usuarios inexistentes (V1.10, V2.13). Deben resolverse antes de la carga.
-- **Exclusividad de jueces en UF.** Una unidad funcional declara jueces por
-  cantidad directa **o** por pool, nunca ambos ni ninguno. La migración debe
-  detectar y resolver las que violen la exclusividad (V3.3).
-- **Roles con forma inconsistente.** `rol` aparece a veces como array y a veces
-  como string u otro tipo (V1.6); valores fuera del catálogo esperado (V1.7).
-- **Colisión de email por casing.** Dos usuarios con el mismo email en distinto
-  casing (V1.1, V7.1) deben resolverse a una única identidad.
-- **Marca temporal con forma dual.** `actualizado_a` conviven Timestamp, string y
-  ausente (V2.9): la migración debe canonicalizar a una sola forma.
-- **Taxonomía con forma o valores inesperados.** Valores no-string (V4.6),
-  estructura doble-anidada `{ v1: {...} }` dentro del propio doc `v1` (V4.7),
-  grupos ausentes o vacíos (V4.5), códigos fuera de catálogo (V4.3).
-- **Versionado de taxonomía nunca usado.** El sistema actual asume un único
-  documento `v1`; hay que confirmar (V0.3, V7.2) que no existen versiones
-  distintas antes de modelar la taxonomía como 1:1 por organismo.
-- **Campos "obligatorios" ausentes en datos legados.** Organismos sin alguno de
-  los campos que el alta nueva exige (V2.1); UF con campos de completitud vacíos
-  (V3.4); documentos de usuario con solo `{email, rol, provincia}` (V1.5).
-- **Denominación simplificada legada.** Organismos con valores del catálogo
-  anterior de 39 en vez del catálogo actual de 10 (V2.4).
-- **Editores con ruido.** Emails duplicados dentro de un mismo array o con casing
-  mixto (V2.10, V7.6).
-- **Localidades duplicadas.** Misma `nombre` + `provincia` en más de un registro
-  (V5.2): UF distintas podrían referir a "la misma" localidad con ids diferentes.
-- **Valores numéricos guardados como texto.** `jueces_asistidos` y
-  `anio_implementacion` guardados como texto libre no siempre convertible (V3.6,
-  V3.7); `cantidad_jueces` o `latitud`/`longitud` eventualmente como string (V6.4,
-  V5.4).
-- **Colecciones no contempladas.** Colecciones o subcolecciones que el código no
-  toca pero existen en el proyecto (V0.2): deben inventariarse antes de declarar
-  el modelo completo.
+Todos los casos borde de esta lista fueron **medidos** contra producción en la
+corrida del 2026-09-07 (`docs/resultado-verificacion-general-20260907.md`); se
+anota junto a cada uno lo que la verificación encontró.
+
+- **Referencias rotas → 0 casos.** `localidad_id` y `pool_jueces_id` (V3.9/V3.10:
+  0), coincidencia de provincia pool↔organismo (V3.11: 0), propietario y editores
+  hacia `users` (V1.10/V2.13: 0). No hay referencias huérfanas que limpiar antes de
+  la carga; la integridad se garantiza igual por diseño.
+- **Jueces en UF → asignaciones a grupos, no tres estados.** Ninguna UF tiene
+  cantidad directa y pool a la vez (V3.3: 0) y 2 UF (de 277) no tienen ninguno de
+  los dos: son la única UF de organismos puramente administrativos ("Secretaria de
+  gestión administrativa" y "Oficina de Gestión Digital"). En el modelo nuevo (D8)
+  la relación UF↔jueces es una tabla puente de asignaciones a Grupos de Jueces con
+  una cantidad por fila: las 2 UF administrativas migran a **cero asignaciones**
+  (equivalente al antiguo `no_aplica`, distinguible de un dato faltante); las UF con
+  cantidad directa migran a **una** asignación a un grupo exclusivo con esa cantidad;
+  y las UF con pool migran a **una** asignación al pool compartido por su total. Los
+  casos de múltiples pools por UF, pool + grupo propio y subconjunto de un pool **no
+  aparecen en los datos actuales** —son conocimiento de dominio para carga futura—,
+  así que la migración inicial produce a lo sumo una asignación por UF.
+- **Rol → forma y valores consistentes.** `rol` es siempre array (V1.6: 0 no-array)
+  y todos sus valores están en catálogo (V1.7: solo `usuario_normal` y `admin`). No
+  requiere canonicalización de forma.
+- **Colisión de email por casing → 0 casos.** Los 46 usuarios tienen ids que son
+  emails válidos en minúscula, sin mayúsculas y sin mismatch contra el campo
+  `email` (V1.1/V1.2: 0). No hay identidades que fusionar; el email único se
+  sostiene por diseño.
+- **`actualizado_a` con forma dual → 1 caso.** 115 de 116 organismos lo tienen como
+  Timestamp y 1 como string ISO (`"2025-07-04T18:13:52.115Z"`); ninguno ausente
+  (V2.8/V2.9). La migración debe parsear ese único string explícitamente, no asumir
+  Timestamp uniforme.
+- **Taxonomía → 1:1 confirmado y completa.** 0 organismos con más de un documento
+  de taxonomía y 0 documentos con id distinto de `v1` (V0.3/V7.2). De los 88
+  organismos cuyo tipo de oficina exige taxonomía, los 88 tienen las 9 columnas
+  completas (V4.2), sin campos ausentes (V4.4: 0) ni grupos anidados vacíos (V4.5:
+  0). El modelado 1:1 por organismo queda confirmado sin excepciones.
+- **Denominación simplificada → solo catálogo vigente.** Los 116 organismos usan
+  exactamente valores del catálogo actual de 10 (V2.4); no aparecen valores del
+  catálogo anterior de 39. No hay mapeo legado que aplicar.
+- **Editores con ruido → 0 casos.** `editores` es siempre array (V2.10: 0 no-array)
+  y ningún organismo tiene emails duplicados (case-insensitive) en `editores[]`
+  (V2.10: 0).
+- **Localidades duplicadas → 0 casos.** 0 pares (nombre, provincia) duplicados
+  (V5.2); `latitud`/`longitud` son siempre numéricos (V5.4). No hay que deduplicar
+  localidades ni convertir coordenadas.
+- **Valores numéricos como texto → solo `anio_implementacion`.** `jueces_asistidos`
+  no tiene valores no convertibles (V3.6: 0), `cantidad_jueces` es siempre número
+  (V6.4) y las coordenadas también (V5.4). El único campo con texto libre es
+  `anio_implementacion` (V3.7), resuelto por D7 (ver FR-015/FR-027).
+- **Colecciones no contempladas → ninguna.** Las colecciones raíz encontradas son
+  exactamente las esperadas por el código (`users`, `organismos`, `localidades`,
+  `pools_jueces`); no hay colecciones inesperadas (V0.2). `organismos` conserva sus
+  subcolecciones `unidades_funcionales` y `taxonomia`.
+- **Campos de contacto/completitud vacíos en UF (dato faltante real, no
+  limpieza).** Persisten vacíos legítimos que no bloquean el modelo: `jueces_asistidos`
+  (36), `telefono` (12), `responsable` (12), `mail` (10), `domicilio` (2),
+  `codigo_postal` (2), `anio_implementacion` (1) (V3.4). Se migran como nulos; su
+  completitud es carga posterior.
+- **Perfiles de usuario mínimos → 3 casos.** 3 de 46 usuarios tienen solo
+  `{email, rol, provincia}` (V1.5); el resto de atributos de perfil se migra como
+  nulo, no como error.
 
 ## Requirements *(mandatory)*
 
@@ -268,8 +326,10 @@ dos estados de migración cuando no.
 - **FR-004**: El modelo MUST representar al Usuario con un identificador interno
   subrogado como identidad primaria, independiente del email.
 - **FR-005**: El Usuario MUST conservar el email como atributo único: no puede
-  haber dos usuarios activos con el mismo email tras la normalización de casing
-  acordada (V1.1 / V7.1).
+  haber dos usuarios activos con el mismo email. La verificación V1.1 confirmó 0
+  colisiones por casing (46 de 46 ids son emails en minúscula que coinciden con el
+  campo `email`), por lo que la unicidad no exige fusionar registros existentes; se
+  impone como restricción hacia adelante.
 - **FR-006**: El modelo MUST capturar los atributos de perfil del usuario que hoy
   existen: nombre para mostrar, email, verificación de email, referencia de foto,
   marcas temporales de creación de cuenta, último ingreso y creación del lado del
@@ -282,7 +342,10 @@ dos estados de migración cuando no.
 
 - **FR-008**: El modelo MUST representar al Organismo con sus atributos actuales:
   denominación, denominación simplificada, tipo de oficina, provincia, id legado
-  (opcional) y marca temporal de última actualización.
+  (`legacy_id`, nullable) y marca temporal de última actualización. La verificación
+  V2.11 confirmó que `legacy_id` es siempre string numérico o `null` (8 nulls de
+  116), sin inconsistencias de tipo; la columna es nullable y su tipo concreto
+  (entero o texto) se decide en `/speckit-plan`.
 - **FR-009**: El modelo MUST expresar la propiedad de un organismo como una
   relación al id subrogado del Usuario propietario (reemplaza
   `organismos.usuario_google`, que hoy guarda un email).
@@ -316,21 +379,70 @@ dos estados de migración cuando no.
 - **FR-015**: El modelo MUST representar la Unidad Funcional como entidad
   perteneciente a un único Organismo, con sus atributos actuales (denominación de
   unidad, tipo de UF, año de implementación, domicilio, teléfono, mail,
-  responsable, código postal).
+  responsable, código postal). El año de implementación se modela según D7 como una
+  única columna `anio_implementacion` de tipo entero, nullable (regla de extracción
+  en FR-027).
 - **FR-016**: El modelo MUST declarar la relación Unidad Funcional → Localidad
   como relación con integridad referencial garantizada (reemplaza `localidad_id`
   suelto).
-- **FR-017**: El modelo MUST declarar la relación Unidad Funcional → Pool de
-  Jueces como relación opcional con integridad referencial garantizada (reemplaza
-  `pool_jueces_id` suelto).
+- **FR-017**: El modelo MUST declarar la relación Unidad Funcional ↔ Grupo de
+  Jueces mediante una **tabla puente de asignaciones**, no como un `pool_jueces_id`
+  único por UF: cada asignación vincula una UF con un Grupo de Jueces y lleva su
+  propia cantidad asignada. Una UF puede tener **cero, una o varias** asignaciones.
+  La relación MUST tener integridad referencial garantizada en ambos extremos (toda
+  asignación resuelve a una UF y a un Grupo existentes; reemplaza el `pool_jueces_id`
+  suelto y su límite de un solo pool por UF).
 - **FR-018**: El modelo MUST representar la asistencia de jueces de una Unidad
-  Funcional como mutuamente excluyente: cantidad directa **o** referencia a un
-  pool, nunca ambas ni ninguna. La migración MUST resolver las UF que hoy violen
-  esta exclusividad (V3.3).
+  Funcional mediante **asignaciones a Grupos de Jueces** (la tabla puente de FR-017,
+  con una cantidad por fila), reemplazando el modelo de tres estados excluyentes de
+  D6 (`jueces_asistidos` / `pool_jueces_id` / `no_aplica`). Según D8 (RESUELTA,
+  2026-09):
+  - **(a) Grupos, no jueces individuales.** Un *Grupo de Jueces* es un pool
+    compartido por varias UF **o** un grupo exclusivo de una sola UF. El modelo MUST
+    registrar solo **cantidades**, nunca jueces por nombre (confirmado con Santi:
+    alcanza con cuántos, no hace falta saber cuáles).
+  - **(b) Múltiples asignaciones por UF.** Una UF puede acceder a **varios pools a la
+    vez**; a uno o más pools **más** un grupo propio no compartido; o a un
+    **subconjunto numérico** de un pool (una cantidad menor que su total) mientras
+    otras UF acceden al pool completo. Cada caso es una fila de la tabla puente con
+    su propia cantidad.
+  - **(c) Ausencia de jueces = cero asignaciones.** Una UF de un organismo
+    administrativo sin jueces por diseño se representa como **ausencia de filas** en
+    la tabla puente (cero asignaciones), no como un valor discriminador; reemplaza el
+    estado `no_aplica`. Esa ausencia MUST seguir siendo distinguible de un dato
+    faltante (V3.3: 2 de 277 UF — "Secretaria de gestión administrativa" y "Oficina
+    de Gestión Digital").
+  - **(d) Total real por grupo.** Cada Grupo de Jueces MUST conservar su **total
+    real** de jueces, independiente de las cantidades que cada UF le asigne. Los
+    subconjuntos y el acceso completo al mismo pool se **solapan a propósito** (una UF
+    puede ver 3 de los mismos 10 que otra ve completos); el modelo MUST NOT imponer
+    que las cantidades asignadas a un grupo sumen su total.
+  - **(e) Dos reglas de conteo que el modelo MUST poder soportar** (la
+    materialización de las consultas es de reporting, fuera de alcance; lo que esta
+    spec exige es que el modelo **preserve la información suficiente** —cantidad y
+    grupo por asignación, total real por grupo— para computar ambas sin ambigüedad):
+    - **Por UF (individual):** se suman **todas** las cantidades asignadas a esa UF,
+      **sin deduplicar** (incluye subconjuntos que se solapan con otras UF).
+    - **Agregado (localidad, provincia, etc.):** se cuenta **cada grupo una sola vez**
+      usando su **total real** — nunca sumando las cantidades por-UF de ese grupo.
+  - **(f) Fuero por asignación.** El fuero no es atributo fijo de la UF ni del grupo,
+    sino de la **asignación**. Cada asignación hereda por defecto los fueros de su
+    Unidad Funcional (los que la UF atiende, derivados de su Organismo — FR-011) y MAY
+    acotarlos a un subconjunto cuando esa asignación específica atiende menos fueros
+    que la UF en general. **Restricción:** los fueros de una asignación MUST NOT
+    exceder los de la UF que la origina. La agregación por fuero se hace **por
+    asignación** (cada asignación aporta al fuero o fueros que declara, no a todos los
+    de la UF ni por UF completa), de modo que un grupo compartido entre UF de distinto
+    fuero puede aportar a más de un fuero.
 - **FR-019**: El modelo MUST representar la Localidad con sus atributos actuales
   (nombre, provincia, latitud, longitud).
-- **FR-020**: El modelo MUST representar el Pool de Jueces con sus atributos
-  actuales (descripción, cantidad de jueces, provincia).
+- **FR-020**: El modelo MUST representar el Grupo de Jueces con su **total real** de
+  jueces y su provincia (y la descripción cuando exista). Un Grupo puede ser un
+  **pool compartido** —referenciable desde varias UF, que hoy corresponde a la
+  colección `pools_jueces` (descripción, cantidad de jueces, provincia)— o un **grupo
+  exclusivo** de una sola UF, que la migración deriva de las UF que hoy llevan
+  cantidad directa (`jueces_asistidos`), modeladas como grupo de un solo miembro. La
+  verificación V6.4 confirmó `cantidad_jueces` siempre numérico.
 
 **Taxonomía**
 
@@ -339,13 +451,18 @@ dos estados de migración cuando no.
   organización e implementación, cada una con su valor del catálogo de códigos
   correspondiente.
 - **FR-022**: El modelo MUST modelar la evaluación taxonómica como una relación de
-  a lo sumo una evaluación por organismo (1:1), salvo que la verificación (V0.3 /
-  V7.2) demuestre que existen múltiples versiones por organismo, en cuyo caso la
-  decisión de modelado MUST registrarse explícitamente.
-- **FR-023**: La migración MUST canonicalizar las formas divergentes de la
-  taxonomía detectadas en la verificación (forma doble-anidada, valores no-string,
-  grupos ausentes o vacíos, códigos fuera de catálogo) a la forma única del
-  modelo.
+  a lo sumo una evaluación por organismo (1:1). La verificación V0.3 / V7.2 del
+  2026-09-07 confirmó esta cardinalidad **sin excepciones**: 0 organismos con más de
+  un documento de taxonomía y 0 documentos con id distinto de `v1`. Además, de los
+  88 organismos cuyo tipo de oficina exige taxonomía, los 88 tienen las 9 columnas
+  completas (V4.2).
+- **FR-023**: La migración MUST canonicalizar a la forma única del modelo cualquier
+  forma divergente de la taxonomía. La verificación del 2026-09-07 encontró la
+  taxonomía limpia en lo medido: 0 campos ausentes o vacíos (V4.4) y 0 grupos
+  anidados vacíos (V4.5) sobre los 88 organismos completos. Las divergencias de
+  forma que ese script no cubrió (doble-anidado, valores no-string, códigos fuera de
+  catálogo — V4.3/V4.6/V4.7) MUST verificarse antes de la carga y, si aparecieran,
+  canonicalizarse.
 
 **Catálogos / vocabularios controlados**
 
@@ -358,24 +475,42 @@ dos estados de migración cuando no.
 **Integridad referencial y limpieza (Principio VIII)**
 
 - **FR-025**: El modelo MUST declarar como relaciones con integridad garantizada
-  todas las que hoy son referencias sueltas: UF→localidad, UF→pool,
-  organismo→propietario, organismo↔editores, organismo↔fueros.
+  todas las que hoy son referencias sueltas: UF→localidad, UF↔grupos de jueces
+  (asignaciones), organismo→propietario, organismo↔editores, organismo↔fueros.
 - **FR-026**: Toda referencia rota detectada por las verificaciones (V1.10, V2.13,
-  V3.9, V3.10) MUST resolverse (limpieza o mapeo) **antes** de la carga; no se
-  cargan registros huérfanos.
+  V3.9, V3.10, V3.11) MUST resolverse (limpieza o mapeo) **antes** de la carga; no
+  se cargan registros huérfanos. La corrida del 2026-09-07 reportó **0 referencias
+  rotas** en las 116 organismos y 277 UF, por lo que no hay limpieza previa
+  pendiente; la restricción de integridad se aplica igual, para que cualquier
+  referencia rota futura sea imposible por diseño.
 
 **Canonicalización de datos divergentes (Principio VII)**
 
-- **FR-027**: La migración MUST canonicalizar a una única forma los campos que hoy
-  conviven con formas o tipos inconsistentes: marca temporal de actualización
-  (Timestamp / string / ausente), rol (array / string), y los valores numéricos
-  guardados como texto (`jueces_asistidos`, `anio_implementacion`,
-  `cantidad_jueces`, `latitud`/`longitud`).
+- **FR-027**: La migración MUST canonicalizar a una única forma los campos cuya
+  divergencia confirmó la verificación del 2026-09-07:
+  - **`actualizado_a`**: 115 de 116 organismos como Timestamp y 1 como string ISO
+    (`"2025-07-04T18:13:52.115Z"`), ninguno ausente (V2.8/V2.9). La migración MUST
+    parsear ese string explícitamente en vez de asumir Timestamp uniforme.
+  - **`anio_implementacion`**: texto libre (fechas, descripciones, valores sin
+    sentido) que se canoniza a un año entero según D7 (regla abajo).
+
+  La misma verificación confirmó que **no** requieren canonicalización: `rol`
+  (siempre array — V1.6), `cantidad_jueces` (siempre número — V6.4),
+  `latitud`/`longitud` (siempre número — V5.4) y `jueces_asistidos` (0 valores no
+  convertibles — V3.6).
+
+  Regla de `anio_implementacion` (D7): una sola columna entera nullable; se extrae
+  el año cuando hay una fecha reconocible (`"1/7/2021"` → 2021); queda `null` cuando
+  no hay ningún año identificable (`"9"`, cadena vacía); y `"2015. Refuncionalización
+  2024"` se resuelve como **2015** (año de implementación original, no el de la
+  refuncionalización posterior).
 - **FR-028**: Las decisiones de nulidad, tipo canónico y tratamiento de cada
-  divergencia (limpiar, mapear o aceptar variabilidad) MUST tomarse a partir de
-  los resultados fechados de `docs/verificacion-datos-firestore.md`, no de los
-  supuestos del código (Principio VII). Esta spec no fija esos tipos; los deja
-  condicionados a la verificación y a `/speckit-plan`.
+  divergencia (limpiar, mapear o aceptar variabilidad) MUST tomarse a partir de los
+  resultados fechados del 2026-09-07
+  (`docs/resultado-verificacion-general-20260907.md` y
+  `docs/resultado-verificacion-fueros-20260907.md`), no de los supuestos del código
+  (Principio VII). Esta spec ya incorpora esos resultados; los tipos de columna
+  concretos se deciden en `/speckit-plan`.
 - **FR-029**: Los valores legados que quedan fuera de catálogo (p. ej.
   denominación simplificada del listado anterior de 39, códigos de taxonomía fuera
   de catálogo) MUST tener una decisión de mapeo o preservación registrada antes de
@@ -419,13 +554,24 @@ dos estados de migración cuando no.
   `multifuero_sin_detalle`— que preservan el estado conocido de los datos actuales
   durante la carga pendiente.
 - **Unidad Funcional**: delegación/subdelegación/área específica de un organismo.
-  Atributos de contacto y ubicación. Pertenece a un Organismo, referencia una
-  Localidad, y declara jueces por cantidad directa **o** por Pool de Jueces (nunca
-  ambos).
+  Atributos de contacto y ubicación (incluido `anio_implementacion` como año entero
+  nullable). Pertenece a un Organismo, referencia una Localidad, y declara su
+  asistencia de jueces mediante **cero o más Asignaciones** a Grupos de Jueces. Cero
+  asignaciones = organismo administrativo sin jueces por diseño (reemplaza el antiguo
+  `no_aplica`, 2 casos confirmados), distinguible de un dato faltante.
 - **Localidad**: localidad geográfica (nombre, provincia, latitud, longitud).
   Referenciada por Unidades Funcionales.
-- **Pool de Jueces**: agrupación de jueces con una cantidad (descripción, cantidad
-  de jueces, provincia). Referenciado opcionalmente por Unidades Funcionales.
+- **Grupo de Jueces**: agrupación de jueces con un **total real** y una provincia.
+  Puede ser un *pool compartido* (referenciado por varias UF; corresponde a la
+  colección `pools_jueces` — descripción, cantidad de jueces, provincia) o un *grupo
+  exclusivo* de una sola UF (derivado en la migración de las UF con cantidad directa).
+  Su total real es independiente de las cantidades que cada UF le asigne.
+- **Asignación de Jueces (relación Unidad Funcional↔Grupo de Jueces)**: fila de la
+  tabla puente que vincula una UF con un Grupo y registra la **cantidad asignada**
+  (el total del grupo o un subconjunto numérico) y los **fueros** que esa asignación
+  atiende (por defecto los de la UF, acotables a un subconjunto, nunca excedentes). Es
+  la unidad de agregación por fuero. Una UF tiene cero o más asignaciones; un pool
+  compartido es referenciado por varias.
 - **Evaluación Taxonómica**: valoración de un organismo en nueve dimensiones
   agrupadas (gestión, institucional, organización, implementación), cada una con
   un código de catálogo. A lo sumo una por organismo.
@@ -443,26 +589,35 @@ dos estados de migración cuando no.
   registros en origen es igual al conteo en destino, evidenciado en el log de
   reconciliación (0 entidades con discrepancia sin resolver).
 - **SC-003**: Tras la migración, existen 0 referencias que apunten a registros
-  inexistentes en cualquier relación del modelo.
+  inexistentes en cualquier relación del modelo (el origen ya está en 0 según
+  V1.10/V2.13/V3.9/V3.10/V3.11 del 2026-09-07).
 - **SC-004**: El 100% de las relaciones de propiedad y edición de organismos
   apunta al id subrogado de un usuario existente; 0 referencias por email.
-- **SC-005**: Tras la normalización de casing, existen 0 usuarios activos con
-  email duplicado.
+- **SC-005**: Existen 0 usuarios activos con email duplicado. La verificación V1.1
+  ya reportó 0 colisiones por casing en los 46 usuarios de origen, así que la
+  migración parte de un conjunto sin duplicados; la restricción se mantiene para
+  altas futuras.
 - **SC-006**: Para el 100% de los organismos (116 según la verificación del
   2026-09-07), `fuero_simplificado` es determinable a partir de su listado de
   fueros o de uno de los dos estados de migración; **0 organismos** quedan en
   `sin_fueros_asignados` (no hay campos vacíos hoy) y los **20** hoy en
   `multifuero` quedan en `multifuero_sin_detalle`.
-- **SC-007**: El 100% de las Unidades Funcionales migradas cumple la exclusividad
-  jueces-directos / pool (0 UF con ambos o ninguno tras la migración).
+- **SC-007**: El 100% de las 277 Unidades Funcionales migradas tiene sus
+  asignaciones de jueces resueltas: **2 UF** quedan con **cero asignaciones**
+  (organismos administrativos, sin jueces por diseño) y las **275 restantes** con
+  **una o más asignaciones** cada una (exclusivas, pools completos o subconjuntos, en
+  cualquier combinación).
 - **SC-008**: Existe un log de reconciliación con conteo de origen, conteo de
   destino y resultado por cada entidad, y con la fecha de la corrida.
 - **SC-009**: La fuente Firestore permanece accesible en modo solo lectura después
   de la migración (respaldo verificable disponible).
-- **SC-010**: El 100% de las divergencias de tipo/forma listadas en la
-  verificación (marca temporal dual, rol array/string, numéricos como texto,
-  formas de taxonomía) tiene una decisión de canonicalización aplicada y
-  registrada antes de la carga.
+- **SC-010**: El 100% de las divergencias de tipo/forma confirmadas por la
+  verificación del 2026-09-07 tiene una decisión de canonicalización aplicada y
+  registrada antes de la carga: el único `actualizado_a` en string ISO se parsea a
+  Timestamp, y los valores de texto de `anio_implementacion` reportados por V3.7
+  (fechas, descripciones y valores sin sentido) se convierten a año entero o `null`
+  según D7. Los campos que la verificación confirmó ya uniformes (rol, coordenadas,
+  `cantidad_jueces`, `jueces_asistidos`) no requieren acción.
 
 ## Assumptions
 
@@ -484,18 +639,27 @@ dos estados de migración cuando no.
   altas futuras, no para la migración actual. El estado `multifuero_sin_detalle`
   cubre **20 organismos reales confirmados** (no una estimación): los que hoy
   declaran `multifuero` sin el detalle de qué fueros asisten.
-- **Taxonomía 1:1.** Se asume una única evaluación taxonómica por organismo (el
-  versionado `v1` del sistema actual nunca se materializó en más de una versión).
-  La verificación V0.3 / V7.2 debe confirmarlo antes de cerrar el modelo; si
-  aparecen versiones múltiples, la decisión se revisa y se registra (FR-022).
-- **Normalización de email.** Se asume que las colisiones de email por casing
-  (V1.1) se resuelven normalizando a minúscula, coherente con cómo el sistema
-  actual da de alta usuarios; el detalle exacto se confirma con la verificación.
-- **Estado real de los datos.** Esta spec describe el modelo objetivo y las reglas
-  de migración; los valores concretos de nulidad, tipos canónicos y volumen de
-  referencias rotas dependen de correr las verificaciones de
-  `docs/verificacion-datos-firestore.md` y registrar sus resultados fechados
-  (Principio VII). La spec deja esas decisiones condicionadas, no las prefija.
+- **Taxonomía 1:1 (confirmado por verificación fechada).** La verificación V0.3 /
+  V7.2 del 2026-09-07 confirmó una única evaluación taxonómica por organismo sin
+  excepciones (0 organismos con más de un documento, 0 documentos con id distinto de
+  `v1`). Ya no es un supuesto pendiente: el modelado 1:1 (FR-022) queda cerrado.
+- **Identidad de usuario (D4, confirmado por verificación fechada).** La
+  verificación V1.1 del 2026-09-07 encontró **0 colisiones de email por casing** (46
+  de 46 ids son emails en minúscula que coinciden con el campo `email`). En `users`
+  no hay nada que limpiar. La decisión de usar un id subrogado en lugar del email
+  como clave primaria se sostiene por **diseño hacia adelante** (Principio V, soporte
+  de múltiples métodos de autenticación), no por un problema en los datos actuales.
+- **`legacy_id` (confirmado por verificación fechada).** V2.11 confirmó que
+  `legacy_id` es siempre string numérico o `null` (8 nulls de 116), sin
+  inconsistencias de tipo. Se modela como columna nullable; su tipo concreto (entero
+  o texto) se decide en `/speckit-plan`.
+- **Estado real de los datos (verificación ya corrida).** Las verificaciones de
+  `docs/verificacion-datos-firestore.md` se corrieron el 2026-09-07 y sus resultados
+  están en `docs/resultado-verificacion-general-20260907.md` y
+  `docs/resultado-verificacion-fueros-20260907.md`. Esta spec ya incorpora esos
+  números reales (conteos, tipos canónicos, 0 referencias rotas) en vez de supuestos
+  (Principio VII). Los tipos de columna concretos siguen difiriéndose a
+  `/speckit-plan`.
 - **Código muerto no se modela.** Los artefactos identificados como huérfanos,
   duplicados o inconsistentes en la auditoría §7.2/§7.3 (p. ej. la función
   huérfana de importación de taxonomía y sus mapeos divergentes) no se toman como
@@ -527,13 +691,17 @@ Esta feature **NO** incluye (son features o fases posteriores):
 
 ## Dependencias
 
-- **Verificación de datos.** Ejecutar `docs/verificacion-datos-firestore.md` y
-  registrar sus resultados fechados es prerrequisito para cerrar las decisiones de
-  nulidad, tipos canónicos e integridad referencial (FR-026, FR-028; Principio
-  VII). En particular V0.2, V0.3, V1.1, V2.13, V3.3, V3.9, V3.10, V4.6/V4.7 y toda
-  la sección V7.
+- **Verificación de datos (satisfecha el 2026-09-07).** El prerrequisito de correr
+  `docs/verificacion-datos-firestore.md` y registrar sus resultados fechados ya se
+  cumplió: ver `docs/resultado-verificacion-general-20260907.md` y
+  `docs/resultado-verificacion-fueros-20260907.md`. Cubren V0.2, V0.3, V1.1, V2.13,
+  V3.3, V3.9, V3.10, V3.11 y la taxonomía (V4.x). Quedan pendientes de una corrida
+  complementaria, si el plan las necesita, V4.6/V4.7 (formas divergentes de
+  taxonomía), V6.6 (localidades huérfanas) y V4.8, señaladas como de bajo impacto en
+  el resultado general.
 - **Acceso administrativo a Firestore.** Necesario para leer los datos de origen y
   para mantener la fuente en modo solo lectura como respaldo (FR-033), sin
   hardcodear rutas de credenciales (Principio XIII).
-- **Decisiones cerradas D3 y D4** de `docs/decisiones-pendientes.md`, ya
-  incorporadas a esta spec.
+- **Decisiones cerradas D3, D4, D7 y D8** de `docs/decisiones-pendientes.md`, ya
+  incorporadas a esta spec. D8 reemplaza el tercer estado `no_aplica` de D6 por la
+  tabla puente de asignaciones UF↔grupos de jueces.

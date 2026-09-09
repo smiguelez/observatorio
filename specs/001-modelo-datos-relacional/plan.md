@@ -18,8 +18,9 @@ resultados de verificación fechados del 2026-09-07):
   recursos. No aplica ningún perfil de hardware acotado.
 - **Claves subrogadas**: enteras (`bigint GENERATED ALWAYS AS IDENTITY`, el
   equivalente moderno de `bigserial`) para `organismos`, `localidades`,
-  `pools_jueces`, `usuarios` y `unidades_funcionales`. **No UUID**: no hay
-  generación distribuida ni requisito de ocultar secuencialidad.
+  `grupos_jueces`, `usuarios`, `unidades_funcionales` y
+  `unidad_funcional_grupo_jueces`. **No UUID**: no hay generación distribuida ni
+  requisito de ocultar secuencialidad.
 - **Nombres**: `snake_case` en tablas y columnas.
 - **Identidad de usuario**: `id` subrogado como PK; `email` como columna `unique`
   case-insensitive (tipo `citext`), **no** como clave primaria (Principio V, D4).

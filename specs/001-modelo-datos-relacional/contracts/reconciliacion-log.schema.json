@@ -40,7 +40,9 @@
             "organismo_fueros",
             "unidades_funcionales",
             "localidades",
-            "pools_jueces",
+            "grupos_jueces",
+            "unidad_funcional_grupo_jueces",
+            "asignacion_fueros",
             "evaluaciones_taxonomicas"
           ]
         },

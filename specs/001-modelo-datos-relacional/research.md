@@ -28,8 +28,8 @@ spec y de los resultados de verificación.
 ## D-02 — Tipo de clave primaria subrogada
 
 - **Decisión**: claves subrogadas enteras con `bigint GENERATED ALWAYS AS
-  IDENTITY` para `usuarios`, `organismos`, `localidades`, `pools_jueces` y
-  `unidades_funcionales`. **No UUID.**
+  IDENTITY` para `usuarios`, `organismos`, `localidades`, `grupos_jueces`,
+  `unidades_funcionales` y `unidad_funcional_grupo_jueces`. **No UUID.**
 - **Rationale**: input del usuario. No hay generación distribuida de ids ni
   necesidad de ocultar secuencialidad, que son las dos razones que justificarían
   UUID. `GENERATED ALWAYS AS IDENTITY` es el equivalente moderno y
@@ -85,8 +85,9 @@ spec y de los resultados de verificación.
   2. **`CHECK` por columna** para los 9 códigos de taxonomía (valores fijos por
      la metodología del instrumento), más una tabla `taxonomia_codigos`
      (dimensión, código, etiqueta) para las etiquetas de reporting.
-  3. **`enum` nativo** para los discriminadores internos del modelo que son
-     fijos y no son catálogos de usuario: `modo_jueces`, `estado_fueros`.
+  3. **`enum` nativo** para el discriminador interno del modelo que es fijo y no
+     es catálogo de usuario: `estado_fueros`. (`modo_jueces` fue eliminado por
+     D8; la asistencia de jueces se modela con tablas puente — ver D-07.)
 - **Rationale**:
   - Los catálogos de dominio **evolucionan** (denominación bajó de 39 a 10; los
     fueros se ampliarán con la carga de referentes) y sirven para joins de
@@ -99,9 +100,8 @@ spec y de los resultados de verificación.
     columna-dimensión redundante por código; el `CHECK` por columna expresa el
     catálogo exacto de cada dimensión sin esa redundancia, y `taxonomia_codigos`
     provee las etiquetas para reporting.
-  - `modo_jueces` y `estado_fueros` son máquinas de estado internas, no
-    catálogos administrables: `enum` nativo las documenta y restringe sin una
-    tabla extra.
+  - `estado_fueros` es una máquina de estado interna, no un catálogo
+    administrable: `enum` nativo la documenta y restringe sin una tabla extra.
 - **Alternativas descartadas**: (a) `enum` nativo para todos los catálogos de
   dominio — rígido; ampliar fueros/provincias requeriría `ALTER TYPE` y no
   admite etiquetas; (b) FK compuesto para los 9 códigos de taxonomía — exige
@@ -139,27 +139,45 @@ spec y de los resultados de verificación.
   en backend — el backend está fuera de alcance y dejaría el valor no disponible
   para reporting directo.
 
-## D-07 — Tercer estado de jueces en UF (D6)
+## D-07 — Asistencia de jueces en UF: tabla puente de asignaciones (D8, reemplaza a D6)
 
-- **Decisión**: discriminador explícito `unidades_funcionales.modo_jueces`
-  (`enum`: `cantidad_directa`, `pool`, `no_aplica`) + `jueces_asistidos integer
-  NULL` + `pool_jueces_id bigint NULL REFERENCES pools_jueces`, con `CHECK` de
-  exclusividad:
-  - `cantidad_directa` → `jueces_asistidos IS NOT NULL AND pool_jueces_id IS NULL`
-  - `pool` → `pool_jueces_id IS NOT NULL AND jueces_asistidos IS NULL`
-  - `no_aplica` → ambos `NULL`
-- **Rationale**: D6 pide un tercer estado explícito. Inferir el estado por el
-  patrón de nulls es frágil (la auditoría documenta esa fragilidad): con dos
-  columnas nullable, `(NULL, NULL)` no distingue "no aplica por diseño" de "dato
-  faltante". El discriminador lo hace inequívoco (FR-018). V3.3 (2026-09-07)
-  confirma 0 UF con ambos poblados y exactamente 2 UF con ninguno (las UF de
-  "Secretaria de gestión administrativa" y "Oficina de Gestión Digital") →
-  `no_aplica`. Regla de asignación en migración: pool presente → `pool`; si no,
-  `jueces_asistidos` numérico → `cantidad_directa`; si ambos vacíos →
-  `no_aplica` (rinde exactamente esas 2 UF).
-- **Alternativas descartadas**: (a) inferir por nulls sin discriminador — no
-  distingue `no_aplica` de faltante (viola D6/FR-018); (b) tabla separada de
-  "asignación de jueces" — sobreingeniería para una relación 1:1 con la UF.
+- **Decisión**: la relación UF↔jueces se modela como tabla puente
+  `unidad_funcional_grupo_jueces (id, unidad_funcional_id, grupo_jueces_id,
+  cantidad_asignada, UNIQUE(uf, grupo))` sobre `grupos_jueces` — que generaliza
+  `pools_jueces`: un grupo es un pool compartido o un grupo exclusivo de una sola
+  UF, con `total_jueces` como total real. Los fueros por asignación van en
+  `asignacion_fueros (asignacion_id, fuero_id)`. Se **eliminan** el discriminador
+  `modo_jueces` y las columnas `jueces_asistidos` / `pool_jueces_id` de la UF.
+- **Rationale**: D8 (2026-09) reemplaza los tres estados excluyentes —que solo
+  cubrían "una cantidad directa", "un pool" o "ninguno"— por un modelo que admite
+  los cinco casos reales: N exclusivos, pool compartido, varios pools a la vez,
+  pool + grupo propio, y subconjunto numérico de un pool. Una UF con **0..N**
+  asignaciones los cubre todos. El antiguo `no_aplica` deja de ser un valor de
+  enum y pasa a ser, simplemente, **cero filas** en la tabla puente (las 2 UF
+  administrativas, V3.3) — sigue siendo distinguible de un dato faltante porque
+  "faltante" ya no es un estado representable: o hay asignaciones o no las hay.
+  Solo se guardan cantidades, no jueces por nombre (confirmado con Santi):
+  `cantidad_asignada` por fila y `total_jueces` por grupo bastan para los dos
+  conteos (por UF sin deduplicar; agregado contando cada grupo una vez por su
+  total real). No se restringe que las cantidades de un grupo sumen su total: los
+  subconjuntos se solapan a propósito (D8/FR-018d).
+- **Fuero por asignación (FR-018f)**: el fuero es atributo de la asignación, no
+  de la UF ni del grupo. `asignacion_fueros` vacío = hereda los fueros del
+  organismo de la UF; con filas = subconjunto explícito, que el trigger
+  `trg_asignacion_fuero_dentro_de_uf` obliga a ser ⊆ `organismo_fueros` (una
+  restricción entre tablas no expresable con `CHECK`, Principio VIII).
+- **Migración**: pool presente → asignación al `grupos_jueces` de ese pool con
+  `cantidad_asignada = total_jueces`; `jueces_asistidos` numérico → `grupos_jueces`
+  exclusivo nuevo (`total_jueces = jueces_asistidos`) + una asignación; ambos
+  vacíos → cero asignaciones. Rinde ≤1 asignación por UF y `asignacion_fueros`
+  vacía (los casos multi-pool, subconjunto y acotamiento de fuero son carga
+  futura: 0 en los datos actuales).
+- **Alternativas descartadas**: (a) el discriminador `modo_jueces` de tres
+  estados — no cubre multi-pool ni subconjuntos (motivo del cambio, D8); (b)
+  jueces como entidad individual + puente UF↔juez — resolvería el subconjunto con
+  exactitud pero exige cargar jueces por nombre, dato que hoy no existe (D8 opción
+  (a), descartada por Santi); (c) conservar `jueces_asistidos` como columna
+  directa además del puente — dos fuentes de verdad para el mismo hecho.
 
 ## D-08 — `anio_implementacion` (D7)
 
@@ -269,7 +287,7 @@ spec y de los resultados de verificación.
 | D-04 | Email | `citext UNIQUE`, no PK; normalizado a minúscula |
 | D-05 | Vocabularios | Tablas de referencia (dominio) / `CHECK` (taxonomía) / `enum` (estados) |
 | D-06 | `fuero_simplificado` | Vista + relación N:M + `estado_fueros` |
-| D-07 | Jueces en UF | Discriminador `modo_jueces` + `CHECK` de exclusividad |
+| D-07 | Jueces en UF | Tabla puente `unidad_funcional_grupo_jueces` + `asignacion_fueros` (D8; reemplaza `modo_jueces`) |
 | D-08 | `anio_implementacion` | `smallint NULL`, extracción por regla D7 |
 | D-09 | Marcas temporales | `timestamptz` UTC, parseo del ISO único |
 | D-10 | `legacy_id` | `integer NULL` |

@@ -17,9 +17,8 @@ CREATE EXTENSION IF NOT EXISTS citext;
 CREATE TYPE estado_fueros_enum AS ENUM (
   'cargado', 'multifuero_sin_detalle', 'sin_fueros_asignados'
 );
-CREATE TYPE modo_jueces_enum AS ENUM (
-  'cantidad_directa', 'pool', 'no_aplica'
-);
+-- (modo_jueces_enum eliminado: D8 reemplaza los tres estados de jueces por la
+--  tabla puente unidad_funcional_grupo_jueces; ver §5, §6 y §6.5.)
 
 -- ================================================ 1. Vocabularios controlados
 CREATE TABLE provincias (
@@ -119,42 +118,91 @@ CREATE TABLE localidades (
   UNIQUE (nombre, provincia_id)                     -- V5.2: 0 duplicados
 );
 
--- ============================================================= 5. pools_jueces
-CREATE TABLE pools_jueces (
-  id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  descripcion     text     NOT NULL,
-  cantidad_jueces integer  NOT NULL CHECK (cantidad_jueces >= 0),
-  provincia_id    smallint NOT NULL REFERENCES provincias (id),
-  firestore_id    text NOT NULL UNIQUE
+-- ============================================================= 5. grupos_jueces
+-- Grupo de jueces con un TOTAL REAL (D8/FR-020). Puede ser un pool compartido
+-- (varias UF lo referencian; origen: colección `pools_jueces`) o un grupo
+-- exclusivo de una sola UF (derivado en la migración de las UF con cantidad
+-- directa, modelado como grupo de un solo miembro). El total real es
+-- independiente de las cantidades que cada UF le asigne.
+CREATE TABLE grupos_jueces (
+  id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  descripcion  text,                                 -- NULL en grupos exclusivos derivados
+  total_jueces integer  NOT NULL CHECK (total_jueces >= 0),
+  provincia_id smallint NOT NULL REFERENCES provincias (id),
+  firestore_id text UNIQUE                           -- doc-id de `pools_jueces`; NULL si exclusivo derivado
 );
 
 -- ==================================================== 6. unidades_funcionales
+-- La asistencia de jueces NO vive en columnas de esta tabla (D8): se modela en
+-- unidad_funcional_grupo_jueces (§6.5). Cero filas allí = sin jueces por diseño
+-- (equivale al antiguo `no_aplica`), distinguible de un dato faltante.
 CREATE TABLE unidades_funcionales (
   id                  bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   organismo_id        bigint   NOT NULL REFERENCES organismos (id) ON DELETE CASCADE,
   denominacion_unidad text     NOT NULL,
   localidad_id        bigint   NOT NULL REFERENCES localidades (id),
   tipo_uf_id          smallint NOT NULL REFERENCES tipos_uf (id),
-  modo_jueces         modo_jueces_enum NOT NULL,
-  jueces_asistidos    integer  CHECK (jueces_asistidos >= 0),
-  pool_jueces_id      bigint   REFERENCES pools_jueces (id),
   anio_implementacion smallint,
   domicilio           text,
   telefono            text,
   mail                text,
   responsable         text,
   codigo_postal       text,
-  firestore_id        text NOT NULL UNIQUE,
-  -- Exclusividad de los tres modos de jueces (D6 / D-07):
-  CONSTRAINT modo_jueces_exclusivo CHECK (
-    (modo_jueces = 'cantidad_directa'
-       AND jueces_asistidos IS NOT NULL AND pool_jueces_id IS NULL)
-    OR (modo_jueces = 'pool'
-       AND pool_jueces_id IS NOT NULL AND jueces_asistidos IS NULL)
-    OR (modo_jueces = 'no_aplica'
-       AND jueces_asistidos IS NULL AND pool_jueces_id IS NULL)
-  )
+  firestore_id        text NOT NULL UNIQUE
 );
+
+-- ============================ 6.5 asignaciones de jueces (UF ↔ grupo) — D8/FR-017/FR-018
+-- Tabla puente que reemplaza el modelo de tres estados. Una UF tiene 0..N
+-- asignaciones; cada fila la vincula con un grupo y lleva la cantidad que esa
+-- UF ve de ese grupo (su total real o un subconjunto numérico). Los subconjuntos
+-- y el acceso completo al mismo grupo se solapan a propósito: NO se impone que
+-- las cantidades asignadas a un grupo sumen su total (D8/FR-018d).
+CREATE TABLE unidad_funcional_grupo_jueces (
+  id                  bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  unidad_funcional_id bigint  NOT NULL REFERENCES unidades_funcionales (id) ON DELETE CASCADE,
+  grupo_jueces_id     bigint  NOT NULL REFERENCES grupos_jueces (id),
+  cantidad_asignada   integer NOT NULL CHECK (cantidad_asignada > 0),
+  UNIQUE (unidad_funcional_id, grupo_jueces_id)      -- a lo sumo una asignación por (UF, grupo)
+);
+
+-- Fueros que atiende una asignación (FR-018f). El fuero es atributo de la
+-- ASIGNACIÓN, no de la UF ni del grupo. Vacío = la asignación hereda todos los
+-- fueros del organismo de la UF; con filas = subconjunto explícito. Restricción:
+-- no puede exceder los fueros del organismo de la UF (trigger de abajo). La
+-- agregación por fuero se hace por asignación.
+CREATE TABLE asignacion_fueros (
+  asignacion_id bigint   NOT NULL REFERENCES unidad_funcional_grupo_jueces (id) ON DELETE CASCADE,
+  fuero_id      smallint NOT NULL REFERENCES fueros (id),
+  PRIMARY KEY (asignacion_id, fuero_id)
+);
+
+-- FR-018f: cada fuero declarado en una asignación debe pertenecer a los fueros
+-- del organismo de la UF que la origina (organismo_fueros). Es una restricción
+-- de subconjunto entre tablas, no expresable con CHECK; se impone con trigger
+-- (Principio VIII). En la migración inicial asignacion_fueros queda vacía (no
+-- hay acotamientos de fuero en los datos actuales), así que el trigger no
+-- dispara hasta que la carga posterior declare subconjuntos.
+CREATE FUNCTION asignacion_fuero_dentro_de_uf() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM unidad_funcional_grupo_jueces a
+    JOIN unidades_funcionales uf ON uf.id = a.unidad_funcional_id
+    JOIN organismo_fueros ofu    ON ofu.organismo_id = uf.organismo_id
+                                AND ofu.fuero_id = NEW.fuero_id
+    WHERE a.id = NEW.asignacion_id
+  ) THEN
+    RAISE EXCEPTION
+      'El fuero % de la asignación % excede los fueros del organismo de la UF (FR-018f)',
+      NEW.fuero_id, NEW.asignacion_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_asignacion_fuero_dentro_de_uf
+  BEFORE INSERT OR UPDATE ON asignacion_fueros
+  FOR EACH ROW EXECUTE FUNCTION asignacion_fuero_dentro_de_uf();
 
 -- =============================================== 7. evaluaciones_taxonomicas
 -- PK sobre organismo_id impone "a lo sumo una por organismo" (1:1, D-12).
@@ -205,11 +253,12 @@ CREATE INDEX ix_organismos_propietario   ON organismos (propietario_id);
 CREATE INDEX ix_organismos_provincia     ON organismos (provincia_id);
 CREATE INDEX ix_uf_organismo             ON unidades_funcionales (organismo_id);
 CREATE INDEX ix_uf_localidad             ON unidades_funcionales (localidad_id);
-CREATE INDEX ix_uf_pool                  ON unidades_funcionales (pool_jueces_id);
+CREATE INDEX ix_ufgj_grupo               ON unidad_funcional_grupo_jueces (grupo_jueces_id);
+CREATE INDEX ix_asignacion_fueros_fuero  ON asignacion_fueros (fuero_id);
 CREATE INDEX ix_org_editores_usuario     ON organismo_editores (usuario_id);
 CREATE INDEX ix_org_fueros_fuero         ON organismo_fueros (fuero_id);
 CREATE INDEX ix_usuario_roles_rol        ON usuario_roles (rol_id);
 CREATE INDEX ix_localidades_provincia    ON localidades (provincia_id);
-CREATE INDEX ix_pools_provincia          ON pools_jueces (provincia_id);
+CREATE INDEX ix_grupos_provincia         ON grupos_jueces (provincia_id);
 
 COMMIT;

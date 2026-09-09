@@ -18,7 +18,7 @@ IDENTITY`; email `citext UNIQUE`; `timestamptz` en UTC. Cada tabla migrada lleva
 ## Diagrama de relaciones (resumen)
 
 ```text
-provincias ─┐ (FK provincia en: usuarios, organismos, localidades, pools_jueces)
+provincias ─┐ (FK provincia en: usuarios, organismos, localidades, grupos_jueces)
             │
 usuarios ──< usuario_roles >── roles
    │  ▲
@@ -32,9 +32,10 @@ organismos ──< organismo_fueros >── fueros
    │  ├──── evaluaciones_taxonomicas (1:1, PK = organismo_id)
    │  └──< unidades_funcionales
    │            │  tipo_uf → tipos_uf
-   │            │  modo_jueces (enum) + jueces_asistidos | pool_jueces_id
    │            ├── localidad_id → localidades
-   │            └── pool_jueces_id → pools_jueces (opcional)
+   │            └──< unidad_funcional_grupo_jueces >── grupos_jueces
+   │                     │  (cantidad_asignada por fila; 0..N por UF)
+   │                     └──< asignacion_fueros >── fueros
    ▼
 vista_fuero_simplificado (deriva fuero_simplificado por organismo)
 migracion_reconciliacion (operativa: conteos por entidad)
@@ -56,7 +57,7 @@ migración (FR-024). Estrategia y alternativas: ver research **D-05**.
 
 Semilla: 24 valores de `organismoOptions.provinciaOptions` (incluye `La Rioja`,
 `Misiones`, `Santa Cruz`, que aún no tienen localidades). Referenciada por
-`usuarios`, `organismos`, `localidades`, `pools_jueces`.
+`usuarios`, `organismos`, `localidades`, `grupos_jueces`.
 
 ### 1.2 `tipos_oficina`
 
@@ -84,7 +85,8 @@ aparece el catálogo anterior de 39). Referenciada por
 `penal`, `civil`, `familia`, `laboral`. **`multifuero` NO es un fuero**: es un
 valor calculado (ver `vista_fuero_simplificado`). El catálogo se amplía con un
 `INSERT` si la carga de referentes revela fueros nuevos, sin cambiar la
-estructura. Referenciada por `organismo_fueros`.
+estructura. Referenciada por `organismo_fueros` (fueros del organismo) y por
+`asignacion_fueros` (fueros acotados de una asignación de jueces, §6.5).
 
 ### 1.6 `roles`
 
@@ -209,9 +211,6 @@ subcolección `organismos/{id}/unidades_funcionales`.
 | `denominacion_unidad` | `text NOT NULL` | | `denominacion_unidad` |
 | `localidad_id` | `bigint NOT NULL REFERENCES localidades` | Integridad garantizada | `localidad_id` |
 | `tipo_uf_id` | `smallint NOT NULL REFERENCES tipos_uf` | | `tipo_uf` |
-| `modo_jueces` | `modo_jueces_enum NOT NULL` | `cantidad_directa` / `pool` / `no_aplica` | derivado (V3.3) |
-| `jueces_asistidos` | `integer NULL CHECK (>= 0)` | Solo si `modo=cantidad_directa` | `jueces_asistidos` |
-| `pool_jueces_id` | `bigint NULL REFERENCES pools_jueces` | Solo si `modo=pool` | `pool_jueces_id` |
 | `anio_implementacion` | `smallint NULL` | Año extraído por regla D7 | `anio_implementacion` |
 | `domicilio` | `text NULL` | | `domicilio` |
 | `telefono` | `text NULL` | | `telefono` |
@@ -224,17 +223,16 @@ Reglas / notas:
 - **FR-015**: pertenece a un único organismo (FK NOT NULL). `anio_implementacion`
   = `smallint NULL`, extracción D7 (D-08): `"1/7/2021"`→2021; `"2015.
   Refuncionalización 2024"`→2015; `"9"`/`""`→`NULL`.
-- **FR-016/017**: `localidad_id` FK NOT NULL; `pool_jueces_id` FK opcional. V3.9:
-  0 `localidad_id` roto; V3.10: 0 `pool_jueces_id` roto.
-- **FR-018 / D-07**: `CHECK` de exclusividad de los tres modos de jueces:
-  - `modo_jueces='cantidad_directa'` → `jueces_asistidos IS NOT NULL AND pool_jueces_id IS NULL`
-  - `modo_jueces='pool'` → `pool_jueces_id IS NOT NULL AND jueces_asistidos IS NULL`
-  - `modo_jueces='no_aplica'` → `jueces_asistidos IS NULL AND pool_jueces_id IS NULL`
-  V3.3: 0 con ambos, 2 con ninguno → `no_aplica` (organismos administrativos).
+- **FR-016**: `localidad_id` FK NOT NULL. V3.9: 0 `localidad_id` roto.
+- **FR-017/018 (D8 / D-07)**: la asistencia de jueces **no** es columna de esta
+  tabla. Se modela en la tabla puente `unidad_funcional_grupo_jueces` (§6.5): una
+  UF tiene 0..N asignaciones. Cero asignaciones = sin jueces por diseño (las 2 UF
+  administrativas, V3.3), distinguible de dato faltante. V3.10: 0 `pool_jueces_id`
+  roto en origen → todas las UF con pool resuelven a una asignación.
 - **Vacíos legítimos** (V3.4): `telefono` (12), `responsable` (12), `mail` (10),
   `domicilio`/`codigo_postal` (2), `anio_implementacion` (1) → migran como
-  `NULL`; completitud es carga posterior. `jueces_asistidos` vacío (36) se
-  resuelve por el modo (los pool tienen `jueces_asistidos NULL` por diseño).
+  `NULL`; completitud es carga posterior. El `jueces_asistidos` vacío (36) ya no
+  es una columna: una UF sin jueces simplemente no genera asignaciones en §6.5.
 
 ---
 
@@ -258,21 +256,85 @@ Origen: colección `localidades` (id autogenerado). No se escribe desde la UI.
 
 ---
 
-## 6. `pools_jueces`
+## 6. `grupos_jueces`
 
-Agrupación de jueces con una cantidad. Origen: colección `pools_jueces`.
+Grupo de jueces con un **total real** (D8/FR-020). Puede ser un **pool
+compartido** (varias UF lo referencian; origen: colección `pools_jueces`) o un
+**grupo exclusivo** de una sola UF (derivado en la migración de las UF con
+cantidad directa, como grupo de un solo miembro). El total real es independiente
+de las cantidades que cada UF le asigne. Reemplaza a `pools_jueces`.
 
 | Columna | Tipo | Reglas | Origen Firestore |
 |---|---|---|---|
 | `id` | `bigint` PK IDENTITY | | — (subrogado) |
-| `descripcion` | `text NOT NULL` | | `descripcion` |
-| `cantidad_jueces` | `integer NOT NULL CHECK (>= 0)` | | `cantidad_jueces` |
-| `provincia_id` | `smallint NOT NULL REFERENCES provincias` | | `provincia` |
-| `firestore_id` | `text NOT NULL UNIQUE` | Trazabilidad | doc-id |
+| `descripcion` | `text NULL` | `NULL` en grupos exclusivos derivados (sin descripción en origen) | `descripcion` |
+| `total_jueces` | `integer NOT NULL CHECK (>= 0)` | Total real del grupo | `cantidad_jueces` (pool) / `jueces_asistidos` (exclusivo) |
+| `provincia_id` | `smallint NOT NULL REFERENCES provincias` | | `provincia` (pool) / provincia del organismo (exclusivo) |
+| `firestore_id` | `text NULL UNIQUE` | Trazabilidad; `NULL` en grupos exclusivos derivados | doc-id (solo pools) |
 
-- **FR-020**. V6.3: 0 sin descripción/provincia/cantidad; V6.4: `cantidad_jueces`
-  siempre número. V3.11: 0 pools con provincia distinta a la del organismo en
-  modo pool.
+- **FR-020**. V6.3: 0 pools sin descripción/provincia/cantidad; V6.4:
+  `cantidad_jueces` siempre número. V3.11: 0 pools con provincia distinta a la del
+  organismo en modo pool.
+- **Distinción compartido/exclusivo**: no se almacena como discriminador (sería
+  frágil); se deriva del número de UF que referencian el grupo en §6.5. La
+  provenance —pool migrado vs. exclusivo derivado— queda marcada por
+  `firestore_id IS NOT NULL`.
+- **Migración**: cada `pools_jueces` de Firestore → un `grupos_jueces` con
+  `total_jueces = cantidad_jueces` y su `firestore_id`. Cada UF con cantidad
+  directa (`jueces_asistidos`) → un `grupos_jueces` exclusivo nuevo con
+  `total_jueces = jueces_asistidos`, `descripcion`/`firestore_id` en `NULL` y la
+  provincia del organismo.
+
+---
+
+## 6.5 `unidad_funcional_grupo_jueces` (asignaciones) y `asignacion_fueros`
+
+Tabla puente que reemplaza el modelo de tres estados (D8/FR-017/FR-018). Es la
+**Asignación de Jueces** del spec: vincula una UF con un grupo y registra la
+cantidad que esa UF ve de ese grupo.
+
+| Columna | Tipo | Reglas |
+|---|---|---|
+| `id` | `bigint` PK IDENTITY | Clave subrogada (destino de FK desde `asignacion_fueros`) |
+| `unidad_funcional_id` | `bigint NOT NULL REFERENCES unidades_funcionales` | |
+| `grupo_jueces_id` | `bigint NOT NULL REFERENCES grupos_jueces` | |
+| `cantidad_asignada` | `integer NOT NULL CHECK (> 0)` | Cantidad que esta UF ve del grupo: su total real o un subconjunto numérico |
+| | `UNIQUE (unidad_funcional_id, grupo_jueces_id)` | A lo sumo una asignación por par (UF, grupo) |
+
+- **FR-017**: una UF tiene **0..N** asignaciones (varios pools; pool + grupo
+  propio; subconjunto de un pool; o ninguna). Integridad referencial en ambos
+  extremos.
+- **FR-018c**: **cero asignaciones = sin jueces por diseño** (equivale al antiguo
+  `no_aplica`; las 2 UF administrativas, V3.3), distinguible de dato faltante.
+- **FR-018d**: los subconjuntos y el acceso completo al mismo grupo se solapan a
+  propósito; **no** se impone que las `cantidad_asignada` de un grupo sumen su
+  `total_jueces`, ni que una asignación no supere el total (D8 lo descarta
+  explícitamente).
+- **FR-018e (dos conteos)**: el modelo preserva lo necesario para ambos sin
+  ambigüedad. **Por UF**: `SUM(cantidad_asignada)` de esa UF, sin deduplicar.
+  **Agregado** (localidad/provincia/…): cada grupo una vez por `total_jueces`,
+  nunca sumando las `cantidad_asignada` por-UF. Ejemplo D8 — UF1: 5 exclusivos +
+  pool A (5) + subconjunto de 3 del pool B (10, que UF3 usa completo) → por UF
+  13 / 5 / 10; agregado 5+5+10 = 20, no 28.
+
+**`asignacion_fueros`** — fueros que atiende una asignación (FR-018f):
+
+`asignacion_id bigint FK` · `fuero_id smallint FK` · PK `(asignacion_id,
+fuero_id)`.
+
+- El fuero es atributo de la **asignación**, no de la UF ni del grupo.
+  `asignacion_fueros` **vacío** = la asignación hereda todos los fueros del
+  organismo de la UF; **con filas** = subconjunto explícito.
+- **Restricción (trigger `trg_asignacion_fuero_dentro_de_uf`)**: cada fuero de
+  una asignación debe pertenecer a `organismo_fueros` del organismo de la UF —
+  no puede excederlos. Es subconjunto entre tablas, no expresable con `CHECK`
+  (Principio VIII → trigger).
+- **Agregación por fuero**: por asignación (cada fila aporta al fuero o fueros
+  que declara), no por UF completa; un grupo compartido entre UF de distinto
+  fuero puede aportar a más de un fuero.
+- **Migración inicial**: `asignacion_fueros` queda **vacía** — los datos
+  actuales no traen acotamientos de fuero por asignación (son carga futura). El
+  trigger no dispara hasta que se declaren subconjuntos.
 
 ---
 
@@ -348,7 +410,8 @@ cero pérdida (FR-031, SC-008).
 ## Tipos enumerados internos (`enum` nativo, D-05)
 
 - `estado_fueros_enum`: `('cargado', 'multifuero_sin_detalle', 'sin_fueros_asignados')`
-- `modo_jueces_enum`: `('cantidad_directa', 'pool', 'no_aplica')`
+- (`modo_jueces_enum` **eliminado** por D8: la asistencia de jueces ya no es un
+  discriminador de tres estados sino la tabla puente `unidad_funcional_grupo_jueces`.)
 
 ---
 
@@ -358,10 +421,10 @@ cero pérdida (FR-031, SC-008).
 |---|---|
 | `users` | `usuarios` + `usuario_roles` |
 | `organismos` | `organismos` + `organismo_editores` + `organismo_fueros` |
-| `organismos/*/unidades_funcionales` | `unidades_funcionales` |
+| `organismos/*/unidades_funcionales` | `unidades_funcionales` + `unidad_funcional_grupo_jueces` (asignaciones) + `asignacion_fueros` |
 | `organismos/*/taxonomia` (v1) | `evaluaciones_taxonomicas` |
 | `localidades` | `localidades` |
-| `pools_jueces` | `pools_jueces` |
+| `pools_jueces` | `grupos_jueces` (pools compartidos; los grupos exclusivos se derivan de las UF con cantidad directa) |
 
 Campos sin columna directa, con decisión de descarte registrada (FR-002,
 Principio XI): estructura de versionado `v1` de taxonomía (se aplana a

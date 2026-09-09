@@ -85,7 +85,7 @@ provincias, 10 denominaciones simplificadas, 4 tipos de oficina, 3 tipos de UF,
 | **V. Identidad unificada** | `usuarios.id` subrogado (PK) + `email citext UNIQUE`, no email como PK. Propiedad y edición por FK a `id`. | ✅ Cumple (FR-004/005/009/010) |
 | **VI. Autorización desde la fuente** | Fuera de alcance (reglas de seguridad). El modelo persiste `rol` y ownership; el enforcement es del backend. | ✅ N/A justificado |
 | **VII. Esquema sobre datos verificados** | Todos los tipos, nulidad y FK se deciden a partir de la corrida fechada 2026-09-07, no de supuestos del código. | ✅ Cumple |
-| **VIII. Integridad referencial explícita** | FK para UF→localidad, UF→pool, organismo→propietario, organismo↔editores, organismo↔fueros; catálogos por FK. | ✅ Cumple (FR-025) |
+| **VIII. Integridad referencial explícita** | FK para UF→localidad, UF↔grupos de jueces (asignaciones), organismo→propietario, organismo↔editores, organismo↔fueros; fueros por asignación acotados por trigger; catálogos por FK. | ✅ Cumple (FR-025) |
 | **IX. Migración por partes** | Migración descomponible y verificable por entidad; Firestore en solo-lectura; app actual operativa. | ✅ Cumple (FR-034) |
 | **X. Cero pérdida, reconciliación** | Tabla y log `migracion_reconciliacion` con conteo origen/destino por entidad; halt en discrepancia. | ✅ Cumple (FR-031/032) |
 | **XI. Código muerto no se migra** | `importarTaxonomiaDesdeCSV`, `Layout`, componentes UI sin uso: no se modelan. Taxonomía se modela por catálogo canónico. | ✅ Cumple |

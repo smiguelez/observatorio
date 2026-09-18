@@ -26,3 +26,4 @@ dist-ssr
 
 # Scripts de migración de datos
 /scripts/observatorio-d71a7-firebase-adminsdk-fbsvc-91af726a33.json
+migration/export/*.json

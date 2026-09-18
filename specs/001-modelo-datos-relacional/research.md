@@ -275,6 +275,55 @@ spec y de los resultados de verificación.
   reescribir la extracción en otro lenguaje — descarta el toolchain ya
   verificado sin beneficio.
 
+## D-15 — Localidad sin coordenadas (corrida de migración)
+
+- **Decisión**: la localidad "Ciudad Autónoma de Buenos Aires" (doc
+  `AhG90OkqogQ93egSR7I1`) no traía `latitud`/`longitud` en el snapshot de origen
+  (2026-09-16) — dato agregado después de la verificación V5.4 (2026-09-07), que
+  no encontró ningún caso así. Está referenciada por 1 UF activa, así que no se
+  podía omitir sin perder esa UF (Principio X). Se completó con la coordenada
+  real y pública del centro de CABA (Obelisco, -34.6037/-58.3816), confirmada
+  por el usuario, y se dejó constancia en el código de migración
+  (`migration/src/transform/localidades.js`) de que ese valor no vino del
+  origen.
+- **Rationale**: Principio VII (esquema sobre datos verificados) exige no
+  fabricar un valor sin dejarlo trazado; Principio X exige no perder la UF. La
+  alternativa de aflojar el `NOT NULL` (D-11) fue descartada por el usuario para
+  no reabrir un contrato ya validado por una sola fila.
+- **Alternativas descartadas**: hacer `latitud`/`longitud` nullable (D-11) —
+  descartado por el usuario; omitir la localidad y la UF que la referencia —
+  viola Principio X (cero pérdida).
+
+## D-16 — `jueces_asistidos = "0"` explícito
+
+- **Decisión**: 9 UF (todas oficinas de "Coordinación...") traen
+  `jueces_asistidos: "0"` explícito en el origen (ni ausente, ni pool). Se
+  tratan igual que "ninguno de los dos poblado" (FR-018c: cero asignaciones =
+  sin jueces por diseño) → 0 asignaciones, sin crear un `grupos_jueces`
+  exclusivo. No estaba cubierto por V3.3 (que solo contaba UF con AMBOS campos
+  ausentes = 2): sube el total de UF sin jueces de 2 a 11, y el total de
+  asignaciones esperado de 275 (quickstart.md, referencia 2026-09-07) a 266.
+- **Rationale**: el esquema exige `cantidad_asignada > 0` (FR-018); un "0"
+  explícito es semánticamente el mismo caso que "sin jueces", no una asignación
+  de cantidad cero. Confirmado por el usuario.
+- **Alternativas descartadas**: cargar una fila con `cantidad_asignada = 0` —
+  el `CHECK` del esquema ya lo prohíbe, y sería contradictorio con FR-018c.
+
+## D-17 — Código de taxonomía fuera de catálogo
+
+- **Decisión**: el organismo `fFzdS7Cfy0I1hYvAFSBW` trae
+  `presencia_territorial: "F"`, fuera del catálogo A-D
+  (`src/constants/taxonomiaOptions.js`) — único caso de código fuera de
+  catálogo en las 89 evaluaciones. Por indicación del usuario, se fuerza a
+  `"A"` y se deja constancia permanente en `migracion_reconciliacion.detalle`
+  (organismo, código original, valor usado).
+- **Rationale**: FR-023 exige solo evaluaciones completas y válidas; sin forma
+  de inferir a qué opción real correspondía el dato, el usuario decidió el
+  valor y pidió trazabilidad explícita en el log en vez de una omisión
+  silenciosa.
+- **Alternativas descartadas**: omitir la fila (quedaría en 88 evaluaciones en
+  vez de 89) — el usuario prefirió conservarla con el valor indicado y la nota.
+
 ---
 
 ## Resumen de decisiones
@@ -295,3 +344,6 @@ spec y de los resultados de verificación.
 | D-12 | Taxonomía | Tabla 1:1 con `organismo_id` como PK |
 | D-13 | Trazabilidad | `firestore_id` por tabla + `migracion_reconciliacion` |
 | D-14 | Migración | Node.js + firebase-admin + pg, credenciales por env |
+| D-15 | Localidad sin coords | CABA completada con coordenada real, trazada en código (corrida) |
+| D-16 | `jueces_asistidos="0"` | Tratado como "sin jueces" (0 asignaciones); 275→266 (corrida) |
+| D-17 | Código taxonomía inválido | "F"→"A" forzado por el usuario, trazado en reconciliación (corrida) |

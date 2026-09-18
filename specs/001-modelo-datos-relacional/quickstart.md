@@ -91,9 +91,9 @@ psql "$PG_DSN" -c "SELECT entidad, conteo_origen, conteo_destino, resultado
                    FROM migracion_reconciliacion ORDER BY entidad;"
 ```
 
-**Esperado (conteos de origen 2026-09-07)**:
+**Referencia original (conteos de origen 2026-09-07)**:
 
-| entidad | conteo esperado |
+| entidad | conteo de referencia (2026-09-07) |
 |---|---|
 | `usuarios` | 46 |
 | `organismos` | 116 |
@@ -103,16 +103,41 @@ psql "$PG_DSN" -c "SELECT entidad, conteo_origen, conteo_destino, resultado
 | `unidad_funcional_grupo_jueces` (asignaciones) | 275 |
 | `evaluaciones_taxonomicas` | 89 |
 
-Todas las filas deben tener `resultado = 'coincide'`. Si alguna entidad quedara
-en `discrepancia_abierta`, su migración se detiene hasta resolver (FR-032): "corrió
+El gate real de SC-002/SC-008 es **origen = destino de la misma corrida**, no
+estas cifras fijas: la app sigue operativa durante la migración (Principio IX),
+así que el origen puede diferir del 2026-09-07 al momento de migrar. La corrida
+real sobre el snapshot del 2026-09-16 reconcilió así (los 3 UF/organismos/1
+usuario de más reflejan altas posteriores al 2026-09-07; el ajuste 275→266 se
+explica en D-16):
+
+| entidad | conteo real (corrida 2026-09-16) |
+|---|---|
+| `usuarios` | 47 |
+| `usuario_roles` | 50 |
+| `organismos` | 117 |
+| `organismo_editores` | 80 |
+| `organismo_fueros` | 97 |
+| `unidades_funcionales` | 277 |
+| `localidades` | 129 |
+| `grupos_jueces` (pools de origen) | 30 |
+| `unidad_funcional_grupo_jueces` (asignaciones) | 266 |
+| `evaluaciones_taxonomicas` | 89 |
+
+Todas las filas deben tener `resultado = 'coincide'` (o `discrepancia_resuelta`
+con `detalle` explicando la resolución). Si alguna entidad quedara en
+`discrepancia_abierta`, su migración se detiene hasta resolver (FR-032): "corrió
 sin error" no es evidencia de completitud.
 
 **Nota (D8)**: `grupos_jueces` reconcilia solo su subconjunto de **pools de
 origen** (`firestore_id IS NOT NULL`) contra los 30 de `pools_jueces`. Los grupos
 **exclusivos** derivados (`firestore_id IS NULL`, uno por UF con cantidad directa)
-y las **275 asignaciones** (una por cada UF con jueces; las 2 UF administrativas
-no generan ninguna) no provienen de una colección de origen: reconcilian contra
-conteos derivados de las UF, no contra Firestore.
+y las **asignaciones** (una por cada UF con jueces) no provienen de una colección
+de origen: reconcilian contra conteos derivados de las UF, no contra Firestore.
+
+**Nota (D-16)**: 9 UF traen `jueces_asistidos = "0"` explícito (no ausente, no
+pool) — se tratan como "sin jueces" (FR-018c), igual que las 2 UF sin ningún
+campo poblado. Total de UF sin asignación: 11 (no 2); total de asignaciones:
+266 (no 275). Ver `research.md` D-16.
 
 ## Paso 5 — Validar integridad y reglas del modelo
 

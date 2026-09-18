@@ -426,8 +426,94 @@ cero pérdida (FR-031, SC-008).
 | `localidades` | `localidades` |
 | `pools_jueces` | `grupos_jueces` (pools compartidos; los grupos exclusivos se derivan de las UF con cantidad directa) |
 
-Campos sin columna directa, con decisión de descarte registrada (FR-002,
-Principio XI): estructura de versionado `v1` de taxonomía (se aplana a
-`evaluaciones_taxonomicas`, id `v1` descartado por V0.3); texto original de
-`anio_implementacion` (descartado por D7, solo se guarda el año). V0.2 confirma 0
-colecciones inesperadas (FR-003).
+V0.2 confirma 0 colecciones inesperadas (FR-003). Mapeo campo a campo contra
+`docs/auditoria-app-actual.md` §2 (T012 — objetivo SC-001: 0 campos sin resolver):
+
+### `users` (§2.1) → `usuarios` / `usuario_roles`
+
+| Campo Firestore | Destino |
+|---|---|
+| doc-id (email) | `usuarios.firestore_id` |
+| `email` | `usuarios.email` |
+| `displayName` | `usuarios.nombre_display` |
+| `emailVerified` | `usuarios.email_verificado` |
+| `photoURL` | `usuarios.foto_url` |
+| `createdAt` | `usuarios.creado_a` |
+| `lastSignInTime` | `usuarios.ultimo_ingreso_a` |
+| `createdAtGoogle` | `usuarios.creado_a_google` |
+| `provincia` | `usuarios.provincia_id` (FK) |
+| `rol` (array) | `usuario_roles` (FR-007) |
+
+### `organismos` (§2.2) → `organismos` / `organismo_editores` / `organismo_fueros`
+
+| Campo Firestore | Destino |
+|---|---|
+| doc-id | `organismos.firestore_id` |
+| `denominacion` | `organismos.denominacion` |
+| `denominacion_simplificada` | `organismos.denominacion_simplificada_id` (FK) |
+| `tipo_oficina` | `organismos.tipo_oficina_id` (FK) |
+| `provincia` | `organismos.provincia_id` (FK) |
+| `usuario_google` | `organismos.propietario_id` (FK a `usuarios.id`, FR-009) |
+| `editores[]` | `organismo_editores` (FR-010) |
+| `legacy_id` | `organismos.legacy_id` |
+| `actualizado_a` | `organismos.actualizado_a` (canonicalizado a `timestamptz`, SC-010) |
+| `fuero_simplificado` | **Descartado como columna**: no se persiste — se deriva por `vista_fuero_simplificado` a partir de `organismo_fueros` + `estado_fueros` (D3/D-06, §8). Los fueros concretos conocidos migran a `organismo_fueros` (FR-011). |
+| `taxonomia` | No es un campo de este registro (confirmado en la auditoría): es su propia entidad, `evaluaciones_taxonomicas` (§7). |
+
+### `organismos/*/unidades_funcionales` (§2.3) → `unidades_funcionales` / `unidad_funcional_grupo_jueces` / `asignacion_fueros`
+
+| Campo Firestore | Destino |
+|---|---|
+| doc-id | `unidades_funcionales.firestore_id` |
+| (organismo padre, de la ruta) | `unidades_funcionales.organismo_id` (FK) |
+| `denominacion_unidad` | `unidades_funcionales.denominacion_unidad` |
+| `localidad_id` | `unidades_funcionales.localidad_id` (FK) |
+| `tipo_uf` | `unidades_funcionales.tipo_uf_id` (FK) |
+| `anio_implementacion` | `unidades_funcionales.anio_implementacion` (año extraído por regla D7; texto original descartado — solo se guarda el año) |
+| `domicilio` | `unidades_funcionales.domicilio` |
+| `telefono` | `unidades_funcionales.telefono` |
+| `mail` | `unidades_funcionales.mail` |
+| `responsable` | `unidades_funcionales.responsable` |
+| `codigo_postal` | `unidades_funcionales.codigo_postal` |
+| `jueces_asistidos` | **Descartado como columna** (D8/FR-017): se deriva un `grupos_jueces` exclusivo + una fila en `unidad_funcional_grupo_jueces` (§6, §6.5). |
+| `pool_jueces_id` | **Descartado como columna** (D8/FR-017): se traduce a una fila en `unidad_funcional_grupo_jueces` que referencia el `grupos_jueces` migrado del pool (§6.5). |
+| (fuero por asignación) | No existe en origen: `asignacion_fueros` queda vacía en la migración inicial (§6.5). |
+
+### `organismos/*/taxonomia` doc `v1` (§2.4) → `evaluaciones_taxonomicas`
+
+| Campo Firestore | Destino |
+|---|---|
+| (organismo padre) | `evaluaciones_taxonomicas.organismo_id` (PK/FK, 1:1) |
+| id de documento `v1` | **Descartado** (estructura de versionado; V0.3 confirma un único doc por organismo) |
+| `gestion.autonomia` | `evaluaciones_taxonomicas.autonomia` |
+| `institucional.insercion_institucional` | `evaluaciones_taxonomicas.insercion_institucional` |
+| `institucional.jerarquia_normativa` | `evaluaciones_taxonomicas.jerarquia_normativa` |
+| `organizacion.dependencia` | `evaluaciones_taxonomicas.dependencia` |
+| `organizacion.asistencia_jurisdiccional` | `evaluaciones_taxonomicas.asistencia_jurisdiccional` |
+| `implementacion.alcance_proceso` | `evaluaciones_taxonomicas.alcance_proceso` |
+| `implementacion.alcance_fuero` | `evaluaciones_taxonomicas.alcance_fuero` |
+| `implementacion.presencia_territorial` | `evaluaciones_taxonomicas.presencia_territorial` |
+| `implementacion.grado_implementacion` | `evaluaciones_taxonomicas.grado_implementacion` |
+| agrupación lógica (`gestion`/`institucional`/`organizacion`/`implementacion`) | **Descartada** como estructura: las 9 dimensiones quedan como columnas planas; la agrupación es documental (§7) |
+
+### `localidades` (§2.5) → `localidades`
+
+| Campo Firestore | Destino |
+|---|---|
+| doc-id | `localidades.firestore_id` |
+| `nombre` | `localidades.nombre` |
+| `provincia` | `localidades.provincia_id` (FK) |
+| `latitud` | `localidades.latitud` |
+| `longitud` | `localidades.longitud` |
+
+### `pools_jueces` (§2.6) → `grupos_jueces`
+
+| Campo Firestore | Destino |
+|---|---|
+| doc-id | `grupos_jueces.firestore_id` |
+| `descripcion` | `grupos_jueces.descripcion` |
+| `cantidad_jueces` | `grupos_jueces.total_jueces` |
+| `provincia` | `grupos_jueces.provincia_id` (FK) |
+
+**Resultado (SC-001)**: 0 campos de `docs/auditoria-app-actual.md` §2 sin
+entidad/atributo o decisión de descarte con razón (Principio XI, FR-002).

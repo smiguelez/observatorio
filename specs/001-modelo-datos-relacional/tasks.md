@@ -24,10 +24,10 @@ description: "Task list for 001-modelo-datos-relacional"
 
 **Purpose**: Estructura del proyecto y toolchain de la herramienta de migración.
 
-- [ ] T001 Crear la estructura de directorios por `plan.md`: `db/schema.sql`, `db/seeds/`, `db/validation/`, `migration/src/{extract,transform,load,reconcile}/`, `migration/config/`
-- [ ] T002 Inicializar la herramienta de migración Node.js 20 en `migration/package.json` con dependencias `firebase-admin` (lectura de origen) y `pg` (carga en destino)
-- [ ] T003 [P] Implementar carga de credenciales desde variables de entorno / gestor de secretos en `migration/config/` — sin rutas hardcodeadas (Principio XIII)
-- [ ] T004 [P] Configurar lint/format de la herramienta en `migration/` siguiendo las convenciones del toolchain existente (`scripts/*.cjs`)
+- [X] T001 Crear la estructura de directorios por `plan.md`: `db/schema.sql`, `db/seeds/`, `db/validation/`, `migration/src/{extract,transform,load,reconcile}/`, `migration/config/`
+- [X] T002 Inicializar la herramienta de migración Node.js 20 en `migration/package.json` con dependencias `firebase-admin` (lectura de origen) y `pg` (carga en destino)
+- [X] T003 [P] Implementar carga de credenciales desde variables de entorno / gestor de secretos en `migration/config/` — sin rutas hardcodeadas (Principio XIII)
+- [X] T004 [P] Configurar lint/format de la herramienta en `migration/` siguiendo las convenciones del toolchain existente (`scripts/*.cjs`)
 
 ---
 
@@ -37,13 +37,13 @@ description: "Task list for 001-modelo-datos-relacional"
 
 **⚠️ CRITICAL**: Ninguna historia de migración/validación puede completarse hasta terminar esta fase.
 
-- [ ] T005 Materializar `db/schema.sql` desde `contracts/schema.sql` (DDL autoritativo): `estado_fueros_enum`; catálogos; `usuarios`/`usuario_roles`; `organismos`/`organismo_editores`/`organismo_fueros`; `localidades`; `grupos_jueces`; `unidades_funcionales`; `unidad_funcional_grupo_jueces`; `asignacion_fueros` + trigger `trg_asignacion_fuero_dentro_de_uf`; `evaluaciones_taxonomicas`; `vista_fuero_simplificado`; `migracion_reconciliacion`; índices
-- [ ] T006 Aplicar `db/schema.sql` a una base PostgreSQL 17 limpia dentro de una transacción y verificar que existen tablas, vista, enum y trigger (`quickstart.md` Paso 1)
-- [ ] T007 [P] Escribir las semillas de vocabularios controlados en `db/seeds/`: `provincias` (24), `tipos_oficina` (4), `denominaciones_simplificadas` (10), `tipos_uf` (3), `fueros` (4: penal/civil/familia/laboral), `roles` (2), `taxonomia_codigos` (etiquetas por dimensión)
-- [ ] T008 Cargar las semillas y verificar los conteos de referencia (`quickstart.md` Paso 2: provincias=24, denominaciones=10, fueros=4)
-- [ ] T009 [P] Implementar la conexión de lectura a Firestore (firebase-admin) por colección en `migration/src/extract/firestore-client.*`
-- [ ] T010 [P] Implementar la conexión de carga a PostgreSQL (pg) y el resolvedor de FK `firestore_id → id subrogado` en `migration/src/load/pg-client.*`
-- [ ] T011 Implementar el motor de reconciliación (conteo origen/destino por entidad, escritura en `migracion_reconciliacion`, `halt` en discrepancia) conforme a `contracts/reconciliacion-log.schema.json` en `migration/src/reconcile/reconcile.*` (depende de T010)
+- [X] T005 Materializar `db/schema.sql` desde `contracts/schema.sql` (DDL autoritativo): `estado_fueros_enum`; catálogos; `usuarios`/`usuario_roles`; `organismos`/`organismo_editores`/`organismo_fueros`; `localidades`; `grupos_jueces`; `unidades_funcionales`; `unidad_funcional_grupo_jueces`; `asignacion_fueros` + trigger `trg_asignacion_fuero_dentro_de_uf`; `evaluaciones_taxonomicas`; `vista_fuero_simplificado`; `migracion_reconciliacion`; índices
+- [X] T006 Aplicar `db/schema.sql` a una base PostgreSQL 17 limpia dentro de una transacción y verificar que existen tablas, vista, enum y trigger (`quickstart.md` Paso 1)
+- [X] T007 [P] Escribir las semillas de vocabularios controlados en `db/seeds/`: `provincias` (24), `tipos_oficina` (4), `denominaciones_simplificadas` (10), `tipos_uf` (3), `fueros` (4: penal/civil/familia/laboral), `roles` (2), `taxonomia_codigos` (etiquetas por dimensión)
+- [X] T008 Cargar las semillas y verificar los conteos de referencia (`quickstart.md` Paso 2: provincias=24, denominaciones=10, fueros=4)
+- [X] T009 [P] Implementar la conexión de lectura a Firestore (firebase-admin) por colección en `migration/src/extract/firestore-client.*`
+- [X] T010 [P] Implementar la conexión de carga a PostgreSQL (pg) y el resolvedor de FK `firestore_id → id subrogado` en `migration/src/load/pg-client.*`
+- [X] T011 Implementar el motor de reconciliación (conteo origen/destino por entidad, escritura en `migracion_reconciliacion`, `halt` en discrepancia) conforme a `contracts/reconciliacion-log.schema.json` en `migration/src/reconcile/reconcile.*` (depende de T010)
 
 **Checkpoint**: Modelo aplicado + semillas cargadas + framework listo → las historias pueden comenzar.
 
@@ -55,10 +55,10 @@ description: "Task list for 001-modelo-datos-relacional"
 
 **Independent Test**: cada colección/campo de la auditoría §2 tiene entidad/atributo o decisión de descarte (SC-001, 0 sin resolver); toda relación implícita es FK explícita; el modelo de asignaciones representa los 5 casos de D8 y los dos conteos (13/5/10 por UF, 20 agregado). Se valida sin migrar datos (inspección de esquema + fixtures sintéticos).
 
-- [ ] T012 [P] [US1] Verificar y completar el mapeo de cobertura colección/campo → entidad del modelo (o decisión de descarte con razón) en `data-model.md` §"Cobertura", contra `docs/auditoria-app-actual.md` §2 — objetivo SC-001: 0 campos sin resolver
-- [ ] T013 [US1] Validar en `db/validation/relaciones.sql` que toda relación implícita de Firestore es FK explícita en el esquema: UF→localidad, UF↔grupos vía `unidad_funcional_grupo_jueces`, organismo→propietario, organismo↔editores, organismo↔fueros, taxonomía 1:1 (PK sobre `organismo_id`)
-- [ ] T014 [US1] Validar el modelo de asignaciones de jueces con fixtures sintéticos en `db/validation/conteo_jueces.sql`: reproducir el ejemplo D8 (UF1 = 5 exclusivos + pool A completo (5) + subconjunto de 3 de pool B (10, UF3 completo)) y comprobar **por UF** 13/5/10 (`SUM(cantidad_asignada)` sin deduplicar) y **agregado** 20 (`SUM(total_jueces)` de grupos referenciados, cada uno una vez), nunca 28
-- [ ] T015 [US1] Validar en `db/validation/reglas_asignacion.sql` las reglas de FR-018: `cantidad_asignada > 0` (CHECK), `UNIQUE(unidad_funcional_id, grupo_jueces_id)`, y el trigger que rechaza un fuero de asignación fuera de `organismo_fueros` del organismo de la UF (`quickstart.md` intentos negativos)
+- [X] T012 [P] [US1] Verificar y completar el mapeo de cobertura colección/campo → entidad del modelo (o decisión de descarte con razón) en `data-model.md` §"Cobertura", contra `docs/auditoria-app-actual.md` §2 — objetivo SC-001: 0 campos sin resolver
+- [X] T013 [US1] Validar en `db/validation/relaciones.sql` que toda relación implícita de Firestore es FK explícita en el esquema: UF→localidad, UF↔grupos vía `unidad_funcional_grupo_jueces`, organismo→propietario, organismo↔editores, organismo↔fueros, taxonomía 1:1 (PK sobre `organismo_id`)
+- [X] T014 [US1] Validar el modelo de asignaciones de jueces con fixtures sintéticos en `db/validation/conteo_jueces.sql`: reproducir el ejemplo D8 (UF1 = 5 exclusivos + pool A completo (5) + subconjunto de 3 de pool B (10, UF3 completo)) y comprobar **por UF** 13/5/10 (`SUM(cantidad_asignada)` sin deduplicar) y **agregado** 20 (`SUM(total_jueces)` de grupos referenciados, cada uno una vez), nunca 28
+- [X] T015 [US1] Validar en `db/validation/reglas_asignacion.sql` las reglas de FR-018: `cantidad_asignada > 0` (CHECK), `UNIQUE(unidad_funcional_id, grupo_jueces_id)`, y el trigger que rechaza un fuero de asignación fuera de `organismo_fueros` del organismo de la UF (`quickstart.md` intentos negativos)
 
 **Checkpoint**: El modelo está aplicado y verificado como representación fiel y completa del dominio (MVP).
 
@@ -72,15 +72,15 @@ description: "Task list for 001-modelo-datos-relacional"
 
 **Nota de orden de carga (runtime)**: el orquestador respeta las dependencias de FK: catálogos → `usuarios` (US4) → `localidades`, `grupos_jueces` → `organismos` → `unidades_funcionales` → asignaciones → `organismo_fueros` (US5), `organismo_editores` (US4), `evaluaciones_taxonomicas`. Cada módulo se implementa de forma independiente; la reconciliación de punta a punta requiere que estén todos.
 
-- [ ] T016 [P] [US2] Extraer + cargar `localidades` (nombre, provincia, lat/long numéricas) en `migration/src/extract/localidades.*` y `migration/src/load/localidades.*`
-- [ ] T017 [P] [US2] Extraer + cargar `grupos_jueces` desde `pools_jueces` (`total_jueces = cantidad_jueces`, `firestore_id` seteado) en `migration/src/extract/grupos-jueces.*` y `migration/src/load/grupos-jueces.*`
-- [ ] T018 [US2] Extraer + transformar + cargar `organismos` (denominación, FK de catálogos, `legacy_id` nullable; canonicalizar el único `actualizado_a` string ISO — SC-010) en `migration/src/{extract,transform,load}/organismos.*`
-- [ ] T019 [US2] Extraer + transformar + cargar `unidades_funcionales` (resolver `localidad_id`; extraer año de `anio_implementacion` por regla D7 — SC-010; vacíos legítimos → NULL) en `migration/src/{extract,transform,load}/unidades-funcionales.*`
-- [ ] T020 [US2] Derivar + cargar asignaciones en `unidad_funcional_grupo_jueces` en `migration/src/{transform,load}/asignaciones-jueces.*`: UF con pool → una asignación al grupo del pool con `cantidad_asignada = total_jueces`; UF con `jueces_asistidos` → crear `grupos_jueces` exclusivo (`total_jueces = jueces_asistidos`, `firestore_id` NULL, provincia del organismo) + una asignación; UF sin ninguno → cero asignaciones. `asignacion_fueros` queda vacía
-- [ ] T021 [P] [US2] Extraer + transformar + cargar `evaluaciones_taxonomicas` (aplanar `taxonomia/v1`; canonicalizar formas divergentes V4.3/V4.6/V4.7 si aparecen) en `migration/src/{extract,transform,load}/taxonomia.*`
-- [ ] T022 [US2] Orquestar la migración completa en orden FK-seguro e invocar la reconciliación por entidad con `halt` en discrepancia (FR-030/031/032/034) en `migration/src/reconcile/orchestrator.*`
-- [ ] T023 [US2] Verificar conteos origen=destino contra las cifras fechadas del 2026-09-07 (`quickstart.md` Paso 4; SC-002/008), incluida la nota D8: `grupos_jueces` con `firestore_id` = 30 pools; los exclusivos derivados y las 275 asignaciones reconcilian contra conteos derivados de las UF
-- [ ] T024 [US2] Confirmar que Firestore queda accesible en modo solo-lectura como respaldo y que cada fila migrada conserva su `firestore_id` (FR-033, SC-009; `quickstart.md` Paso 6)
+- [X] T016 [P] [US2] Extraer + cargar `localidades` (nombre, provincia, lat/long numéricas) en `migration/src/extract/localidades.*` y `migration/src/load/localidades.*`
+- [X] T017 [P] [US2] Extraer + cargar `grupos_jueces` desde `pools_jueces` (`total_jueces = cantidad_jueces`, `firestore_id` seteado) en `migration/src/extract/grupos-jueces.*` y `migration/src/load/grupos-jueces.*`
+- [X] T018 [US2] Extraer + transformar + cargar `organismos` (denominación, FK de catálogos, `legacy_id` nullable; canonicalizar el único `actualizado_a` string ISO — SC-010) en `migration/src/{extract,transform,load}/organismos.*`
+- [X] T019 [US2] Extraer + transformar + cargar `unidades_funcionales` (resolver `localidad_id`; extraer año de `anio_implementacion` por regla D7 — SC-010; vacíos legítimos → NULL) en `migration/src/{extract,transform,load}/unidades-funcionales.*`
+- [X] T020 [US2] Derivar + cargar asignaciones en `unidad_funcional_grupo_jueces` en `migration/src/{transform,load}/asignaciones-jueces.*`: UF con pool → una asignación al grupo del pool con `cantidad_asignada = total_jueces`; UF con `jueces_asistidos` → crear `grupos_jueces` exclusivo (`total_jueces = jueces_asistidos`, `firestore_id` NULL, provincia del organismo) + una asignación; UF sin ninguno → cero asignaciones. `asignacion_fueros` queda vacía
+- [X] T021 [P] [US2] Extraer + transformar + cargar `evaluaciones_taxonomicas` (aplanar `taxonomia/v1`; canonicalizar formas divergentes V4.3/V4.6/V4.7 si aparecen) en `migration/src/{extract,transform,load}/taxonomia.*`
+- [X] T022 [US2] Orquestar la migración completa en orden FK-seguro e invocar la reconciliación por entidad con `halt` en discrepancia (FR-030/031/032/034) en `migration/src/reconcile/orchestrator.*`
+- [X] T023 [US2] Verificar conteos origen=destino contra las cifras fechadas del 2026-09-07 (`quickstart.md` Paso 4; SC-002/008), incluida la nota D8: `grupos_jueces` con `firestore_id` = 30 pools; los exclusivos derivados y las 275 asignaciones reconcilian contra conteos derivados de las UF
+- [X] T024 [US2] Confirmar que Firestore queda accesible en modo solo-lectura como respaldo y que cada fila migrada conserva su `firestore_id` (FR-033, SC-009; `quickstart.md` Paso 6)
 
 **Checkpoint**: Todos los datos migrados con evidencia de cero pérdida por entidad.
 
@@ -92,8 +92,8 @@ description: "Task list for 001-modelo-datos-relacional"
 
 **Independent Test**: recorrer todas las relaciones del modelo en destino → 0 referencias huérfanas (SC-003).
 
-- [ ] T025 [US3] Validar 0 referencias huérfanas post-migración en `db/validation/integridad.sql` para todas las relaciones: UF→localidad, `unidad_funcional_grupo_jueces`→UF/grupo, `asignacion_fueros`→asignación/fuero, organismo→propietario/editores/fueros, taxonomía→organismo (`quickstart.md` Paso 5; SC-003)
-- [ ] T026 [US3] Comprobar en `db/validation/integridad_rechazo.sql` que el esquema rechaza referencias rotas por diseño (intentos de insertar huérfanos → error de FK/trigger)
+- [X] T025 [US3] Validar 0 referencias huérfanas post-migración en `db/validation/integridad.sql` para todas las relaciones: UF→localidad, `unidad_funcional_grupo_jueces`→UF/grupo, `asignacion_fueros`→asignación/fuero, organismo→propietario/editores/fueros, taxonomía→organismo (`quickstart.md` Paso 5; SC-003)
+- [X] T026 [US3] Comprobar en `db/validation/integridad_rechazo.sql` que el esquema rechaza referencias rotas por diseño (intentos de insertar huérfanos → error de FK/trigger)
 
 **Checkpoint**: Integridad referencial garantizada y verificada.
 
@@ -105,10 +105,10 @@ description: "Task list for 001-modelo-datos-relacional"
 
 **Independent Test**: toda referencia de propiedad/edición resuelve a un id subrogado (no email); 0 usuarios con email duplicado (SC-004/005).
 
-- [ ] T027 [P] [US4] Extraer + transformar + cargar `usuarios` (id subrogado; `email` a minúscula `citext`; atributos de perfil faltantes → NULL; `firestore_id` = email de origen) en `migration/src/{extract,transform,load}/usuarios.*`
-- [ ] T028 [US4] Cargar `usuario_roles` desde el array `rol` (todos `usuario_normal`; los admin además `admin`) en `migration/src/load/usuario-roles.*`
-- [ ] T029 [US4] Resolver identidad en `migration/src/transform/identity.*`: `organismos.propietario_id` desde `usuario_google` (email → id) y `organismo_editores` desde `editores[]` (email → id, sin duplicados, case-insensitive)
-- [ ] T030 [US4] Validar identidad en `db/validation/identidad.sql`: 100% de propiedad/edición por id subrogado, 0 referencias por email, 0 emails duplicados (SC-004/005; `quickstart.md` Paso 5)
+- [X] T027 [P] [US4] Extraer + transformar + cargar `usuarios` (id subrogado; `email` a minúscula `citext`; atributos de perfil faltantes → NULL; `firestore_id` = email de origen) en `migration/src/{extract,transform,load}/usuarios.*`
+- [X] T028 [US4] Cargar `usuario_roles` desde el array `rol` (todos `usuario_normal`; los admin además `admin`) en `migration/src/load/usuario-roles.*`
+- [X] T029 [US4] Resolver identidad en `migration/src/transform/identity.*`: `organismos.propietario_id` desde `usuario_google` (email → id) y `organismo_editores` desde `editores[]` (email → id, sin duplicados, case-insensitive)
+- [X] T030 [US4] Validar identidad en `db/validation/identidad.sql`: 100% de propiedad/edición por id subrogado, 0 referencias por email, 0 emails duplicados (SC-004/005; `quickstart.md` Paso 5)
 
 **Checkpoint**: Identidad unificada por id subrogado, verificada.
 
@@ -120,8 +120,8 @@ description: "Task list for 001-modelo-datos-relacional"
 
 **Independent Test**: la vista deriva `fuero_simplificado`; distribución de estados = 96 `cargado` con 1 fuero, 20 `multifuero_sin_detalle`, 0 `sin_fueros_asignados` (SC-006).
 
-- [ ] T031 [US5] Cargar `organismo_fueros` (fueros concretos conocidos) y setear `organismos.estado_fueros` (`cargado` / `multifuero_sin_detalle` / `sin_fueros_asignados`) desde `fuero_simplificado` en `migration/src/{transform,load}/fueros.*`
-- [ ] T032 [US5] Validar en `db/validation/fueros.sql` la derivación de `vista_fuero_simplificado` y la distribución de `estado_fueros` (SC-006: 96/20/0; `multifuero` cuando >1 fuero o `multifuero_sin_detalle`)
+- [X] T031 [US5] Cargar `organismo_fueros` (fueros concretos conocidos) y setear `organismos.estado_fueros` (`cargado` / `multifuero_sin_detalle` / `sin_fueros_asignados`) desde `fuero_simplificado` en `migration/src/{transform,load}/fueros.*`
+- [X] T032 [US5] Validar en `db/validation/fueros.sql` la derivación de `vista_fuero_simplificado` y la distribución de `estado_fueros` (SC-006: 96/20/0; `multifuero` cuando >1 fuero o `multifuero_sin_detalle`)
 
 **Checkpoint**: Fueros modelados como relación y `fuero_simplificado` disponible por vista para reporting.
 

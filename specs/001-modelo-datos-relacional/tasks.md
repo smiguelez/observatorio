@@ -131,9 +131,9 @@ description: "Task list for 001-modelo-datos-relacional"
 
 **Purpose**: Cierre y validación de punta a punta.
 
-- [ ] T033 [P] Redactar el runbook de migración (cómo correr, variables de entorno, comportamiento de `halt`/reanudación, respaldo) en `migration/README.md`
-- [ ] T034 Ejecutar la validación completa de `quickstart.md` de punta a punta (crear esquema → semillas → migrar → reconciliar → integridad) y registrar resultados
-- [ ] T035 [P] Verificar la paridad entre `db/schema.sql` y `contracts/schema.sql` (el DDL aplicado coincide con el contrato autoritativo)
+- [X] T033 [P] Redactar el runbook de migración (cómo correr, variables de entorno, comportamiento de `halt`/reanudación, respaldo) en `migration/README.md`
+- [X] T034 Ejecutar la validación completa de `quickstart.md` de punta a punta (crear esquema → semillas → migrar → reconciliar → integridad) y registrar resultados
+- [X] T035 [P] Verificar la paridad entre `db/schema.sql` y `contracts/schema.sql` (el DDL aplicado coincide con el contrato autoritativo)
 
 ---
 

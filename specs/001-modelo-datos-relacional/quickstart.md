@@ -142,7 +142,18 @@ campo poblado. Total de UF sin asignación: 11 (no 2); total de asignaciones:
 ## Paso 5 — Validar integridad y reglas del modelo
 
 Estas consultas prueban las garantías clave. Todas deben devolver **0 filas**
-(salvo donde se indica un valor):
+(salvo donde se indica un valor). Son la versión abreviada, para lectura
+rápida; la versión completa y reproducible, tal como efectivamente se corrió,
+vive en `db/validation/*.sql` (con conteos y evidencia registrada en
+`docs/resultado-verificacion-*-2026091{7,8}.md`):
+
+- `db/validation/relaciones.sql` (T013) — FK explícitas para toda relación implícita.
+- `db/validation/conteo_jueces.sql` (T014) — modelo de asignaciones D8 con fixtures.
+- `db/validation/reglas_asignacion.sql` (T015) — `CHECK`/`UNIQUE`/trigger de asignaciones, intentos negativos.
+- `db/validation/integridad.sql` (T025) — 0 huérfanas post-migración, 21 relaciones, contra datos reales.
+- `db/validation/integridad_rechazo.sql` (T026) — la FK rechaza referencias rotas por diseño (8 intentos negativos).
+- `db/validation/identidad.sql` (T030) — `usuarios.id` como PK real, 0 colisiones de email por casing, propiedad/edición por id.
+- `db/validation/fueros.sql` (T032) — `vista_fuero_simplificado` y distribución de `estado_fueros`.
 
 ```sql
 -- SC-003: 0 referencias rotas. Las FK del esquema lo hacen imposible por diseño;
@@ -157,14 +168,17 @@ SELECT count(*) FROM organismos o
 -- SC-005: 0 emails duplicados (garantizado por UNIQUE citext).
 SELECT email, count(*) FROM usuarios GROUP BY email HAVING count(*) > 1;     -- 0 filas
 
--- SC-007: 2 UF sin asignaciones (administrativas, sin jueces por diseño) y 275
--- con una o más. Cero asignaciones = sin jueces; no hay estado prohibido (D8).
+-- SC-007 (spec.md describe la REGLA, no un número fijo: toda UF con cero
+-- asignaciones cae en (a) administrativa por diseño (D6) o (b) jueces="0"
+-- explícito confirmado caso por caso (D-16); el conteo por categoría varía
+-- entre corridas). Evidencia puntual de ESTA corrida: 2 del caso (a) + 9 del
+-- caso (b) = 11 con cero asignaciones, 266 con una o más.
 SELECT count(*) FROM unidades_funcionales uf
   WHERE NOT EXISTS (SELECT 1 FROM unidad_funcional_grupo_jueces a
-                    WHERE a.unidad_funcional_id = uf.id);                    -- 2
+                    WHERE a.unidad_funcional_id = uf.id);                    -- 11 (D-16)
 SELECT count(*) FROM unidades_funcionales uf
   WHERE EXISTS (SELECT 1 FROM unidad_funcional_grupo_jueces a
-               WHERE a.unidad_funcional_id = uf.id);                         -- 275
+               WHERE a.unidad_funcional_id = uf.id);                         -- 266 (D-16)
 -- Dos conteos de D8 (FR-018e). Por UF (sin deduplicar):
 SELECT uf.id, COALESCE(SUM(a.cantidad_asignada), 0) AS jueces_por_uf
   FROM unidades_funcionales uf
@@ -188,7 +202,13 @@ SELECT count(*) FROM unidades_funcionales
 ```
 
 Intentos negativos (deben **fallar**, prueba de que el modelo rechaza datos
-inválidos por diseño):
+inválidos por diseño). Los ejemplos abajo son ilustrativos (`id=1`,
+`<fuero_ajeno>` son placeholders); la versión ejecutable real, con fixtures
+propios y `ROLLBACK` al final (no toca datos migrados), es
+`db/validation/reglas_asignacion.sql` (T015, para (a)/(b)/(c) sobre
+`unidad_funcional_grupo_jueces`/`asignacion_fueros`) e
+`db/validation/integridad_rechazo.sql` (T026, para FK rotas en
+`unidades_funcionales`, `organismos`, `organismo_editores`, `organismo_fueros`):
 
 ```sql
 -- (a) Una asignación no puede tener cantidad <= 0 (CHECK cantidad_asignada > 0).
@@ -215,15 +235,23 @@ respaldo.
 
 ## Criterios de aceptación cubiertos
 
-| Success Criteria | Validado en |
-|---|---|
-| SC-001 (cobertura de colecciones/campos) | data-model.md §"Cobertura" + Paso 3 |
-| SC-002 (conteos origen=destino) | Paso 4 |
-| SC-003 (0 referencias rotas) | Paso 5 + FK del esquema |
-| SC-004 (propiedad/edición por id) | Paso 5 |
-| SC-005 (0 emails duplicados) | Paso 5 + `citext UNIQUE` |
-| SC-006 (fuero_simplificado determinable) | Paso 5 + vista |
-| SC-007 (asignaciones de jueces: 2 sin, 275 con) | Paso 5 + tabla puente + trigger |
-| SC-008 (log de reconciliación) | Paso 4 + tabla |
-| SC-009 (Firestore solo-lectura) | Paso 6 |
-| SC-010 (canonicalización) | Paso 5 |
+| Success Criteria | Validado en | Evidencia registrada |
+|---|---|---|
+| SC-001 (cobertura de colecciones/campos) | data-model.md §"Cobertura" + Paso 3 | data-model.md (T012) |
+| SC-002 (conteos origen=destino) | Paso 4 | `migracion_reconciliacion` (corrida 2026-09-17 21:59:06) |
+| SC-003 (0 referencias rotas) | Paso 5 + FK del esquema | `db/validation/integridad.sql` + `docs/resultado-verificacion-integridad-20260918.md` |
+| SC-004 (propiedad/edición por id) | Paso 5 | `db/validation/identidad.sql` + `docs/resultado-verificacion-identidad-20260918.md` |
+| SC-005 (0 emails duplicados) | Paso 5 + `citext UNIQUE` | `db/validation/identidad.sql` (mismo doc) |
+| SC-006 (fuero_simplificado determinable) | Paso 5 + vista | `db/validation/fueros.sql` + `docs/resultado-verificacion-fueros-20260918.md` |
+| SC-007 (regla: cero asignaciones solo por (a) administrativa D6 o (b) jueces="0" confirmado caso a caso D-16; esta corrida: **11 sin, 266 con**) | Paso 5 + tabla puente + trigger | `db/validation/conteo_jueces.sql` (T014); conteo real en Paso 5 de este documento |
+| SC-008 (log de reconciliación) | Paso 4 + tabla | `migracion_reconciliacion` |
+| SC-009 (Firestore solo-lectura) | Paso 6 | Ver `docs/runbook-corte-produccion.md` para el cierre formal del respaldo |
+| SC-010 (canonicalización) | Paso 5 | Paso 5 de este documento (conteo `anio_implementacion`) |
+
+---
+
+**Nota**: este documento valida la corrida de prueba de la migración (US2),
+no el corte final a producción. El proceso para el corte real —cuándo migrar
+la última vez, cómo congelar altas en Firestore, cómo verificar contra el
+respaldo antes de apagar la fuente— está en
+[docs/runbook-corte-produccion.md](../../docs/runbook-corte-produccion.md).

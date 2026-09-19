@@ -602,11 +602,28 @@ anota junto a cada uno lo que la verificación encontró.
   fueros o de uno de los dos estados de migración; **0 organismos** quedan en
   `sin_fueros_asignados` (no hay campos vacíos hoy) y los **20** hoy en
   `multifuero` quedan en `multifuero_sin_detalle`.
-- **SC-007**: El 100% de las 277 Unidades Funcionales migradas tiene sus
-  asignaciones de jueces resueltas: **2 UF** quedan con **cero asignaciones**
-  (organismos administrativos, sin jueces por diseño) y las **275 restantes** con
-  **una o más asignaciones** cada una (exclusivas, pools completos o subconjuntos, en
-  cualquier combinación).
+- **SC-007**: El 100% de las Unidades Funcionales migradas tiene su estado de
+  asignación de jueces resuelto. Toda UF con **cero asignaciones** cae en
+  exactamente una de dos razones válidas — no hay una tercera categoría, y
+  ninguna UF queda en un estado ambiguo o sin resolver:
+  - (a) **administrativa, sin jueces por diseño** (D6): la UF nunca tuvo pool
+    ni cantidad de jueces asociada; o
+  - (b) **`jueces_asistidos` con el valor explícito `"0"`**, confirmado **caso
+    por caso** —nunca asumido en masa— como "sin jueces reales todavía" y no
+    como dato incompleto pendiente de carga (D-16). La regla de detección y la
+    distinción frente a la alternativa "jueces pendientes de asignar" están en
+    `docs/runbook-corte-produccion.md`.
+
+  Las UF restantes tienen una o más asignaciones (exclusivas, pools completos
+  o subconjuntos, en cualquier combinación). **El número de UF en cada
+  categoría no es un valor fijo de este criterio**: depende de cuántos casos
+  de cada tipo existan en los datos al momento de la migración, y puede variar
+  entre corridas (en particular, entre esta corrida de prueba y el corte real
+  a producción). Como evidencia puntual, la corrida de prueba verificada el
+  2026-09-18 (snapshot Firestore 2026-09-16) dio **11 de 277 UF con cero
+  asignaciones** (2 del caso (a) + 9 del caso (b), confirmadas
+  individualmente) y **266 con una o más** — ese 11/266 documenta el resultado
+  de esa corrida, no un objetivo a reproducir exactamente en el corte real.
 - **SC-008**: Existe un log de reconciliación con conteo de origen, conteo de
   destino y resultado por cada entidad, y con la fecha de la corrida.
 - **SC-009**: La fuente Firestore permanece accesible en modo solo lectura después

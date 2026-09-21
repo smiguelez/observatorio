@@ -23,4 +23,15 @@
 
 ## Ítems
 
-*(vacío por ahora — se completa a medida que surjan)*
+1. **Aviso al usuario cuando se revoca su contraseña por verificación
+   cruzada de email.** Better Auth revoca automáticamente la credencial de
+   contraseña de un usuario cuando verifica su email por otro método (magic
+   link) mientras la contraseña aún no estaba verificada
+   (`revokeUnprovenAccountAccess`) — comportamiento correcto y deseado
+   contra apropiación de cuenta (ver `research.md` de
+   `002-backend-api-carga-datos`, hallazgo de la verificación de US1). Para
+   el caso de un usuario legítimo que simplemente probó los dos métodos
+   propios, esto revoca su contraseña sin aviso. No cambia el modelo de
+   datos ni ningún principio — es una mejora de experiencia (ej. un email
+   explicando qué pasó y cómo poner una contraseña nueva), a resolver en la
+   feature de frontend.

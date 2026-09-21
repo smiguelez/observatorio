@@ -1,0 +1,77 @@
+// Helper de limpieza para tests que corren contra la base REAL (no mocks —
+// mismo enfoque que el resto del proyecto). Cada test file usa su propio
+// prefijo de email de prueba; esto borra todo rastro en organismos (y sus
+// dependientes), auth.* y usuarios que matchee ese prefijo, antes y después
+// de correr.
+import type pg from 'pg'
+import type { FastifyInstance } from 'fastify'
+
+export async function limpiarUsuariosDePrueba(pool: pg.Pool, prefix: string) {
+  const patron = `${prefix}%`
+  // organismos.propietario_id y organismo_editores.usuario_id -> usuarios
+  // NO tienen ON DELETE CASCADE (db/schema.sql): hay que borrar estas filas
+  // antes que las de usuarios, o la FK lo rechaza. Borrar el organismo sí
+  // cascadea sus propios dependientes (UF, taxonomía, editores, fueros).
+  await pool.query(
+    `DELETE FROM organismo_editores WHERE usuario_id IN (SELECT id FROM usuarios WHERE email LIKE $1)`,
+    [patron],
+  )
+  await pool.query(
+    `DELETE FROM organismos WHERE propietario_id IN (SELECT id FROM usuarios WHERE email LIKE $1)`,
+    [patron],
+  )
+  await pool.query(
+    `DELETE FROM auth.session WHERE "userId" IN (SELECT id::text FROM usuarios WHERE email LIKE $1)`,
+    [patron],
+  )
+  await pool.query(
+    `DELETE FROM auth.account WHERE "userId" IN (SELECT id::text FROM usuarios WHERE email LIKE $1)`,
+    [patron],
+  )
+  await pool.query(`DELETE FROM auth.verification WHERE value LIKE $1`, [`%${prefix}%`])
+  await pool.query(`DELETE FROM auth."user" WHERE email LIKE $1`, [patron])
+  await pool.query(`DELETE FROM usuarios WHERE email LIKE $1`, [patron])
+}
+
+export function extraerCookie(setCookieHeader: string | string[] | undefined): string {
+  const raw = Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader
+  if (!raw) throw new Error('No vino set-cookie en la respuesta')
+  return raw.split(';')[0]!
+}
+
+export interface UsuarioDePrueba {
+  usuarioId: string
+  cookie: string
+}
+
+// Alta por contraseña + extracción de cookie, para no repetir esto en cada
+// test de organismos/UF/taxonomía.
+export async function crearUsuarioDePrueba(app: FastifyInstance, email: string): Promise<UsuarioDePrueba> {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/auth/sign-up/email',
+    payload: { email, password: 'contrasena-test-12345', name: 'Test' },
+  })
+  if (res.statusCode !== 200) throw new Error(`sign-up falló para ${email}: ${res.statusCode} ${res.body}`)
+  return { usuarioId: res.json().user.id, cookie: extraerCookie(res.headers['set-cookie']) }
+}
+
+export async function hacerAdmin(pool: pg.Pool, usuarioId: string) {
+  await pool.query(
+    `INSERT INTO usuario_roles (usuario_id, rol_id) VALUES ($1, (SELECT id FROM roles WHERE nombre = 'admin'))`,
+    [usuarioId],
+  )
+}
+
+// No hay endpoint de "editar mi perfil" todavía (eso es US4) — la provincia
+// se fija directo por SQL para armar el fixture de los tests de pools.
+export async function asignarProvincia(pool: pg.Pool, usuarioId: string, provinciaId: number) {
+  await pool.query('UPDATE usuarios SET provincia_id = $2 WHERE id = $1', [usuarioId, provinciaId])
+}
+
+// grupos_jueces no tiene una columna que lo ligue a un usuario de prueba
+// (no hay "creado_por"); se limpia por prefijo de `descripcion`, que los
+// tests de pools usan a propósito para poder identificar sus propias filas.
+export async function limpiarPoolsDePrueba(pool: pg.Pool, prefix: string) {
+  await pool.query('DELETE FROM grupos_jueces WHERE descripcion LIKE $1', [`${prefix}%`])
+}

@@ -1,0 +1,27 @@
+-- Semilla: provincias (24) — src/constants/organismoOptions.js:provinciaOptions
+-- Grafía canónica conservada tal cual (sin tildes donde el dato real las omite).
+INSERT INTO provincias (nombre) VALUES
+  ('Buenos Aires'),
+  ('CABA'),
+  ('Catamarca'),
+  ('Chaco'),
+  ('Chubut'),
+  ('Córdoba'),
+  ('Corrientes'),
+  ('Entre Rios'),
+  ('Formosa'),
+  ('Jujuy'),
+  ('La Pampa'),
+  ('La Rioja'),
+  ('Mendoza'),
+  ('Misiones'),
+  ('Neuquén'),
+  ('Rio Negro'),
+  ('Salta'),
+  ('San Juan'),
+  ('San Luis'),
+  ('Santa Cruz'),
+  ('Santa Fe'),
+  ('Santiago del Estero'),
+  ('Tierra del Fuego'),
+  ('Tucumán');

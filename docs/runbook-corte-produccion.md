@@ -55,7 +55,16 @@ verificados).
    (`DiscrepanciaAbiertaError`, FR-032). Esto ya está bien diseñado; el
    runbook solo lo explicita como criterio de ir/no ir del corte, no solo
    como comportamiento del script.
-7. **Encender la app nueva recién con reconciliación 100% en verde.**
+7. **Mergear la rama de integración a `main`, recién en este momento.**
+   Todo el desarrollo de la reformulación (modelo de datos, backend,
+   frontend, reporting) vive en una rama de integración separada
+   (`reformulacion`), no en `main` — porque `main` sigue desplegando la app
+   vieja en producción vía Vercel durante todo el desarrollo (Principio IX),
+   y un merge prematuro dispararía un deploy no deseado. El corte real es el
+   único momento en que `reformulacion` se mergea a `main`, y solo después
+   de que el paso 6 (reconciliación) haya dado gate verde.
+8. **Encender la app nueva recién con el merge del paso 7 hecho y
+   desplegado.**
 
 ---
 

@@ -201,3 +201,56 @@ diseño de `modo_jueces` en `contracts/schema.sql` (plan.md) tal como quedaron
 generados. Requiere reabrir `/speckit-specify` para corregir el requisito
 funcional antes de tocar el plan de nuevo — no es un ajuste de solo
 implementación.
+
+---
+
+**D9 — Código de migración no implementa aún el frenado por confirmación humana que exige el runbook (2026-09-18).**
+
+Al escribir `migration/README.md` (T033), se encontró que ninguna de las tres
+anomalías conocidas (D-15, D-16, D-17) está implementada tal como
+`docs/runbook-corte-produccion.md` exige para el corte real (detectar y
+frenar para confirmación humana, no auto-resolver):
+
+- `jueces_asistidos="0"` (D-16): generaliza por valor, pero resuelve
+  automáticamente sin frenar.
+- Coordenadas de localidad (D-15) y código de taxonomía inválido (D-17):
+  hardcodeados por `firestore_id` puntual — frenan ante un documento nuevo
+  con el mismo problema, pero reaplican en silencio si reaparece el mismo
+  documento.
+
+**No bloquea nada de esta feature ni de la migración de prueba ya hecha** —
+queda documentado en `migration/README.md` (sección "Anomalías conocidas") y
+acá como recordatorio para cuando se retome el proyecto de cara al corte
+real: ajustar `transform/localidades.js`, `transform/asignaciones-jueces.js`
+y `transform/taxonomia.js` para que las tres anomalías siempre frenen y
+esperen confirmación, sin excepción por "ya visto antes".
+
+---
+
+**D10 — Rate limiting de login fallido (`002-backend-api-carga-datos`, T038): NO implementado en esta feature.**
+
+Confirmado contra el código real, no asumido: `grep -rn "rateLimit" backend/src`
+no encuentra ninguna referencia — no hay ningún archivo
+`backend/src/auth/rate-limit.ts` ni configuración `rateLimit` en
+`backend/src/auth/index.ts`. La instancia de Better Auth se creó sin la
+opción `rateLimit`.
+
+Better Auth trae un rate limiter genérico propio, pero **no cubre esto por
+default**: su documentación de tipos dice explícitamente "by default, rate
+limiting is only enabled on production" (`@better-auth/core`,
+`BetterAuthRateLimitOptions.enabled`) — nunca corrió con `NODE_ENV=production`
+en esta feature, así que estuvo desactivado en todas las corridas y tests.
+Aun si se activara, su default (ventana de 10s / máximo 100 requests por IP)
+es un throttle genérico de la ruta, no "intentos de login fallidos **por
+cuenta**" como pide el Principio IV — para eso hace falta una regla
+específica (`customRules`) que esta feature no configuró.
+
+Es una omisión reconocida, no un olvido silencioso: el Principio IV ya deja
+esto en **SHOULD para v1**, con intención explícita registrada ahí mismo de
+"endurecerlo a MUST en una revisión posterior de esta constitution". Esta
+entrada es esa deuda, para que la revisión posterior la encuentre acá y no
+tenga que volver a auditar el código para descubrirlo.
+
+*No bloquea el cierre de la feature* (SHOULD, no MUST) — sí bloquea marcar
+T038 como completo en `tasks.md`; queda registrado como "no implementado",
+no como "hecho".

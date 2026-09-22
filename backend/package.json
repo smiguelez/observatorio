@@ -1,0 +1,37 @@
+{
+  "name": "observatorio-backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Backend/API del Observatorio de Oficinas Judiciales (feature 002-backend-api-carga-datos): reemplaza el acceso directo del navegador a PostgreSQL y reconstruye el modelo de autorización server-side.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/app.ts",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "spike:identity": "tsx scripts/spike-identity.ts",
+    "migrate:auth": "tsx scripts/migrate-auth.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.0.2",
+    "@fastify/type-provider-typebox": "^5.1.0",
+    "@sinclair/typebox": "^0.34.52",
+    "better-auth": "^1.3.29",
+    "fastify": "^5.2.1",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.0",
+    "@types/node": "^20.17.9",
+    "@types/pg": "^8.11.10",
+    "eslint": "^9.25.0",
+    "globals": "^16.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^2.1.8"
+  }
+}

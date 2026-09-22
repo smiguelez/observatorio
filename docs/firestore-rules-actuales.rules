@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function esAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.keys().hasAll(['rol']) &&
+        'admin' in get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.rol;
+    }
+
+    function esOwnerOEditor(datos) {
+      return request.auth != null && (
+        request.auth.token.email == datos.usuario_google ||
+        (datos.keys().hasAll(['editores']) && request.auth.token.email in datos.editores)
+      );
+    }
+
+    function provinciaDelUsuario() {
+      return get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.provincia;
+    }
+
+    match /organismos/{id} {
+      allow get, list: if esOwnerOEditor(resource.data) || esAdmin();
+      allow update, delete: if esOwnerOEditor(resource.data) || esAdmin();
+      allow create: if request.auth != null &&
+        request.resource.data.usuario_google == request.auth.token.email;
+
+      match /unidades_funcionales/{ufId} {
+        allow read, write: if esOwnerOEditor(get(/databases/$(database)/documents/organismos/$(id)).data) || esAdmin();
+      }
+      match /taxonomia/{taxId} {
+        allow read, write: if esOwnerOEditor(get(/databases/$(database)/documents/organismos/$(id)).data) || esAdmin();
+      }
+    }
+
+    match /pools_jueces/{poolId} {
+      allow get, list: if request.auth != null && (
+        resource.data.provincia == provinciaDelUsuario() || esAdmin()
+      );
+      allow update, delete: if request.auth != null && (
+        resource.data.provincia == provinciaDelUsuario() || esAdmin()
+      );
+      allow create: if request.auth != null && (
+        request.resource.data.provincia == provinciaDelUsuario() || esAdmin()
+      );
+    }
+
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.token.email == userId || esAdmin();
+    }
+
+    match /localidades/{id} {
+      allow read: if request.auth != null;
+    }
+  }
+}

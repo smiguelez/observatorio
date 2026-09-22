@@ -279,3 +279,25 @@ a producción**, dado que no hay despliegue real afectado hoy (la app en
 producción sigue siendo la vieja, sin tocar). Se resuelve como parte del
 trabajo de backend sobre taxonomía (feature futura o fast-follow inmediato
 a continuación de 003), con su propio test — no se corrige dentro de 003.
+
+---
+
+**D12 — `evaluaciones_taxonomicas_v1_legacy` queda como respaldo auditable, sin fecha de borrado (003-taxonomia-parametrizable, 2026-09-22).**
+
+La migración `0001_taxonomia_parametrizable` renombra la tabla vieja de 9
+columnas (`evaluaciones_taxonomicas`) a `evaluaciones_taxonomicas_v1_legacy`
+en vez de borrarla — queda en `public.*` con sus 89 filas intactas,
+sin uso por ningún código de aplicación. Es una decisión deliberada
+(`research.md` de `003-taxonomia-parametrizable`, Decisión 4), no un olvido:
+la reconciliación automática de la migración valida *cantidad*
+(origen=destino=801), no necesariamente cada valor individual sin una
+auditoría manual adicional — conservar la tabla vieja un ciclo más permite
+esa auditoría sin depender de un backup externo, a un costo casi nulo (89
+filas).
+
+*Decisión pendiente, explícitamente fuera de esta feature:* cuándo (o si)
+borrar `evaluaciones_taxonomicas_v1_legacy`. No es una decisión de `003` —
+esa feature solo la crea y la deja disponible. Corresponde a una migración
+posterior, después de que exista suficiente confianza (auditoría manual,
+uso real en producción sin discrepancias reportadas) de que la migración a
+la tabla de respuestas parametrizable fue completa y correcta.

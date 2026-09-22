@@ -13,6 +13,6 @@
     "declaration": false,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "migrations/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

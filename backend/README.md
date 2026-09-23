@@ -16,10 +16,12 @@ nuevo consume en producción.
 - La base de `001-modelo-datos-relacional` ya aplicada (esquema `public` +
   semillas de catálogos como mínimo — ver
   `specs/001-modelo-datos-relacional/quickstart.md` Pasos 1-2).
-- Las migraciones de `public.*` de `003-taxonomia-parametrizable` aplicadas
-  (`npm run migrate:public`, ver más abajo) — reformulan
+- Las migraciones de `public.*` aplicadas (`npm run migrate:public`, ver más
+  abajo) — `0001`/`0002` (`003-taxonomia-parametrizable`) reformulan
   `evaluaciones_taxonomicas` de 9 columnas fijas a una tabla de respuestas
-  parametrizable por preguntas.
+  parametrizable por preguntas; `0003` (`004-fix-taxonomia-endpoint`) agrega
+  la guarda de integridad organismo↔pregunta (ver "Endpoint de taxonomía"
+  más abajo).
 
 ## Variables de entorno
 
@@ -128,6 +130,30 @@ Ver `specs/002-backend-api-carga-datos/contracts/api.md` para el contrato
 completo de endpoints y `specs/002-backend-api-carga-datos/quickstart.md`
 para la guía de validación manual paso a paso.
 
+## Endpoint de taxonomía (`004-fix-taxonomia-endpoint`)
+
+`GET`/`PUT /api/organismos/:orgId/taxonomia` fueron reconstruidos contra el
+esquema de `003-taxonomia-parametrizable` — estaban rotos desde esa
+migración (`docs/decisiones-pendientes.md`, D11, resuelta por esta
+feature). `GET` agrupa las respuestas por pregunta (código/texto/tipo
+incluidos); `PUT` reemplaza el conjunto completo de forma atómica y
+traduce cualquier rechazo de trigger a un `400` identificable (nunca un
+`500` genérico — `src/http/trigger-error.ts`, `SQLSTATE P0001`). Contrato
+completo en `specs/004-fix-taxonomia-endpoint/contracts/api.md`.
+
+Dos protecciones de integridad nuevas, relacionadas con un caso real
+(organismo id=311, "OGA MEDIACIÓN") documentado en
+`specs/003-taxonomia-parametrizable/spec.md`:
+
+- **Protección A** (migración `0003`, trigger `trg_evaluacion_tipo_organismo_valido`):
+  ninguna respuesta *nueva* puede guardarse para una pregunta que no
+  aplica al tipo actual del organismo. No revalida datos ya existentes.
+- **Protección B** (`PATCH /api/organismos/:id`, campo opcional
+  `confirmarPerdidaTaxonomia`): cambiar el tipo de un organismo con
+  respuestas que dejarían de aplicar exige confirmación explícita; sin
+  ella, el pedido se rechaza listando qué se perdería. Sin ningún
+  mecanismo de historial/archivado de lo eliminado — decisión explícita.
+
 ## Limitaciones conocidas (deuda reconocida, no silenciosa)
 
 - **Rate limiting de login fallido no implementado** (Principio IV, SHOULD
@@ -144,10 +170,3 @@ para la guía de validación manual paso a paso.
   credenciales reales de Google (requiere un navegador real) — sí se probó
   que la ruta está configurada y devuelve una URL de autorización válida
   (`tests/contract/auth.test.ts`).
-- **`GET`/`PUT /api/organismos/:orgId/taxonomia` están rotos** desde que se
-  aplicó la migración de esquema de `003-taxonomia-parametrizable`: `PUT`
-  falla en firme (columnas de la forma vieja de 9 columnas que ya no
-  existen), `GET` no tira error pero devuelve una forma de datos
-  incorrecta. Sin cobertura de test desde que se creó el endpoint — ver
-  `docs/decisiones-pendientes.md` D11. Se resuelve con la feature de
-  backend sobre la taxonomía nueva, no acá.

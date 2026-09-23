@@ -12,7 +12,10 @@
 import type { FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import { Type, type Static } from '@sinclair/typebox'
+import type pg from 'pg'
 import { getPgPool } from '../db/pool.js'
+import { conTransaccion } from '../db/transaction.js'
+import { esRechazoDeTrigger } from '../http/trigger-error.js'
 import { buscarOrganismoParaAutorizar, puedeGestionarOrganismo } from '../authz/organismos.js'
 
 const CrearOrganismoBody = Type.Object({
@@ -23,7 +26,13 @@ const CrearOrganismoBody = Type.Object({
 })
 type CrearOrganismoBody = Static<typeof CrearOrganismoBody>
 
-const ActualizarOrganismoBody = Type.Partial(CrearOrganismoBody)
+// T015 (004-fix-taxonomia-endpoint, US5): confirmarPerdidaTaxonomia —
+// Protección B. Campo opcional; solo importa cuando el body también trae
+// tipoOficinaId distinto del actual (ver el handler de PATCH).
+const ActualizarOrganismoBody = Type.Object({
+  ...Type.Partial(CrearOrganismoBody).properties,
+  confirmarPerdidaTaxonomia: Type.Optional(Type.Boolean()),
+})
 type ActualizarOrganismoBody = Static<typeof ActualizarOrganismoBody>
 
 const CrearUFBody = Type.Object({
@@ -41,19 +50,21 @@ type CrearUFBody = Static<typeof CrearUFBody>
 
 const ActualizarUFBody = Type.Partial(CrearUFBody)
 
-const CodigoTaxonomia = (valores: string[]) => Type.Union(valores.map((v) => Type.Literal(v)))
-const TaxonomiaBody = Type.Object({
-  autonomia: CodigoTaxonomia(['A', 'B', 'C', 'D']),
-  insercionInstitucional: CodigoTaxonomia(['A', 'B', 'C']),
-  jerarquiaNormativa: CodigoTaxonomia(['A', 'B', 'C', 'D']),
-  dependencia: CodigoTaxonomia(['A', 'B', 'C', 'D']),
-  asistenciaJurisdiccional: CodigoTaxonomia(['A', 'B', 'C']),
-  alcanceProceso: CodigoTaxonomia(['A', 'B', 'C', 'D']),
-  alcanceFuero: CodigoTaxonomia(['A', 'B', 'C', 'E']),
-  presenciaTerritorial: CodigoTaxonomia(['A', 'B', 'C', 'D']),
-  gradoImplementacion: CodigoTaxonomia(['A', 'B']),
+// T002 (004-fix-taxonomia-endpoint, Foundational): reemplaza el TaxonomiaBody
+// viejo (9 columnas fijas, esquema de 001 — roto desde 003-taxonomia-parametrizable,
+// ver docs/decisiones-pendientes.md D11). La forma nueva de una respuesta,
+// direccionada por preguntaCodigo/opcionesCodigos — nunca por id interno
+// (FR-005) — usada por el body de PUT (US2, T006).
+const RespuestaTaxonomiaItem = Type.Object({
+  preguntaCodigo: Type.String({ minLength: 1 }),
+  opcionesCodigos: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+  valorNumero: Type.Optional(Type.Number()),
+  valorTexto: Type.Optional(Type.String()),
 })
-type TaxonomiaBody = Static<typeof TaxonomiaBody>
+const ReemplazarTaxonomiaBody = Type.Object({
+  respuestas: Type.Array(RespuestaTaxonomiaItem),
+})
+type ReemplazarTaxonomiaBody = Static<typeof ReemplazarTaxonomiaBody>
 
 function idParam(request: { params: unknown }, campo = 'id'): number {
   return Number((request.params as Record<string, string>)[campo])
@@ -124,19 +135,65 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
         return reply.code(403).send({ error: 'No autorizado' })
       }
 
-      const { denominacion, denominacionSimplificadaId, tipoOficinaId, provinciaId } = request.body
-      const { rows } = await pool.query(
-        `UPDATE organismos SET
-           denominacion = COALESCE($2, denominacion),
-           denominacion_simplificada_id = COALESCE($3, denominacion_simplificada_id),
-           tipo_oficina_id = COALESCE($4, tipo_oficina_id),
-           provincia_id = COALESCE($5, provincia_id),
-           actualizado_a = now()
-         WHERE id = $1
-         RETURNING id, denominacion, propietario_id`,
-        [id, denominacion ?? null, denominacionSimplificadaId ?? null, tipoOficinaId ?? null, provinciaId ?? null],
-      )
-      return rows[0]
+      const { denominacion, denominacionSimplificadaId, tipoOficinaId, provinciaId, confirmarPerdidaTaxonomia } =
+        request.body
+
+      // T016 (US5, Protección B): solo aplica cuando el body cambia
+      // tipoOficinaId a un valor distinto del actual.
+      let huerfanas: { pregunta_id: number; codigo: string; texto: string }[] = []
+      if (tipoOficinaId !== undefined) {
+        const { rows: actual } = await pool.query<{ tipo_oficina_id: number }>(
+          'SELECT tipo_oficina_id FROM organismos WHERE id = $1',
+          [id],
+        )
+        if (actual[0]!.tipo_oficina_id !== tipoOficinaId) {
+          const { rows } = await pool.query<{ pregunta_id: number; codigo: string; texto: string }>(
+            `SELECT DISTINCT p.id AS pregunta_id, p.codigo, p.texto
+               FROM evaluaciones_taxonomicas e
+               JOIN taxonomia_preguntas p ON p.id = e.pregunta_id
+              WHERE e.organismo_id = $1
+                AND NOT taxonomia_pregunta_aplica_a_tipo(e.pregunta_id, $2)`,
+            [id, tipoOficinaId],
+          )
+          huerfanas = rows
+        }
+      }
+
+      if (huerfanas.length > 0 && confirmarPerdidaTaxonomia !== true) {
+        return reply.code(400).send({
+          error: `El cambio de tipo dejaría sin aplicar ${huerfanas.length} respuesta(s) de taxonomía`,
+          preguntasQueSePerderian: huerfanas.map((h) => ({ codigo: h.codigo, texto: h.texto })),
+        })
+      }
+
+      const actualizar = async (client: pg.Pool | pg.PoolClient) => {
+        const { rows } = await client.query(
+          `UPDATE organismos SET
+             denominacion = COALESCE($2, denominacion),
+             denominacion_simplificada_id = COALESCE($3, denominacion_simplificada_id),
+             tipo_oficina_id = COALESCE($4, tipo_oficina_id),
+             provincia_id = COALESCE($5, provincia_id),
+             actualizado_a = now()
+           WHERE id = $1
+           RETURNING id, denominacion, propietario_id`,
+          [id, denominacion ?? null, denominacionSimplificadaId ?? null, tipoOficinaId ?? null, provinciaId ?? null],
+        )
+        return rows[0]
+      }
+
+      if (huerfanas.length > 0) {
+        // Confirmado: DELETE de las huérfanas + UPDATE de tipo, atómico.
+        const resultado = await conTransaccion(pool, async (client) => {
+          await client.query(
+            'DELETE FROM evaluaciones_taxonomicas WHERE organismo_id = $1 AND pregunta_id = ANY($2)',
+            [id, huerfanas.map((h) => h.pregunta_id)],
+          )
+          return actualizar(client)
+        })
+        return resultado
+      }
+
+      return actualizar(pool)
     },
   )
 
@@ -274,53 +331,124 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
     reply.code(204)
   })
 
-  // --- Taxonomía (FR-014, 1:1 con el organismo) ---
+  // --- Taxonomía (FR-014, 1:1 con el organismo; 004-fix-taxonomia-endpoint) ---
+
+  // T002 (Foundational): consulta compartida entre GET (US1) y la respuesta
+  // de PUT (US2) — agrupa por pregunta (data-model.md, "Vista de consulta/
+  // reemplazo"). json_agg con FILTER deja `opciones` en null cuando la
+  // pregunta no es de opción — se traduce a `undefined` (campo ausente) más
+  // abajo, nunca a un array vacío ni a un null explícito en el JSON.
+  async function obtenerTaxonomiaOrganismo(orgId: number) {
+    const { rows } = await pool.query<{
+      pregunta_codigo: string
+      pregunta_texto: string
+      pregunta_grupo: string
+      tipo_respuesta: 'opcion_unica' | 'opcion_multiple' | 'numerica' | 'texto_libre'
+      opciones: { codigo: string; etiqueta: string }[] | null
+      valor_numero: string | null
+      valor_texto: string | null
+    }>(
+      `SELECT
+         p.codigo AS pregunta_codigo, p.texto AS pregunta_texto, p.grupo AS pregunta_grupo, p.tipo_respuesta,
+         json_agg(json_build_object('codigo', o.codigo, 'etiqueta', o.etiqueta) ORDER BY o.orden)
+           FILTER (WHERE o.id IS NOT NULL) AS opciones,
+         max(e.valor_numero) AS valor_numero,
+         max(e.valor_texto) AS valor_texto
+       FROM evaluaciones_taxonomicas e
+       JOIN taxonomia_preguntas p ON p.id = e.pregunta_id
+       LEFT JOIN taxonomia_opciones o ON o.id = e.opcion_id
+       WHERE e.organismo_id = $1
+       GROUP BY p.id, p.codigo, p.texto, p.grupo, p.tipo_respuesta
+       ORDER BY p.orden`,
+      [orgId],
+    )
+
+    return rows.map((r) => {
+      const pregunta = {
+        codigo: r.pregunta_codigo,
+        texto: r.pregunta_texto,
+        grupo: r.pregunta_grupo,
+        tipoRespuesta: r.tipo_respuesta,
+      }
+      if (r.tipo_respuesta === 'numerica') return { pregunta, valorNumero: Number(r.valor_numero) }
+      if (r.tipo_respuesta === 'texto_libre') return { pregunta, valorTexto: r.valor_texto }
+      return { pregunta, opciones: r.opciones ?? [] }
+    })
+  }
 
   app.get('/api/organismos/:orgId/taxonomia', async (request, reply) => {
     const orgId = await autorizarContraOrganismoPadre(request, reply)
     if (orgId === null) return
-    const { rows } = await pool.query('SELECT * FROM evaluaciones_taxonomicas WHERE organismo_id = $1', [orgId])
-    if (rows.length === 0) return reply.code(404).send({ error: 'No encontrado' })
-    return rows[0]
+    return obtenerTaxonomiaOrganismo(orgId)
   })
 
-  app.put<{ Body: TaxonomiaBody }>(
+  app.put<{ Body: ReemplazarTaxonomiaBody }>(
     '/api/organismos/:orgId/taxonomia',
-    { schema: { body: TaxonomiaBody } },
+    { schema: { body: ReemplazarTaxonomiaBody } },
     async (request, reply) => {
       const orgId = await autorizarContraOrganismoPadre(request, reply)
       if (orgId === null) return
-      const b = request.body
-      const { rows } = await pool.query(
-        `INSERT INTO evaluaciones_taxonomicas
-           (organismo_id, autonomia, insercion_institucional, jerarquia_normativa, dependencia,
-            asistencia_jurisdiccional, alcance_proceso, alcance_fuero, presencia_territorial, grado_implementacion)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-         ON CONFLICT (organismo_id) DO UPDATE SET
-           autonomia = EXCLUDED.autonomia,
-           insercion_institucional = EXCLUDED.insercion_institucional,
-           jerarquia_normativa = EXCLUDED.jerarquia_normativa,
-           dependencia = EXCLUDED.dependencia,
-           asistencia_jurisdiccional = EXCLUDED.asistencia_jurisdiccional,
-           alcance_proceso = EXCLUDED.alcance_proceso,
-           alcance_fuero = EXCLUDED.alcance_fuero,
-           presencia_territorial = EXCLUDED.presencia_territorial,
-           grado_implementacion = EXCLUDED.grado_implementacion
-         RETURNING *`,
-        [
-          orgId,
-          b.autonomia,
-          b.insercionInstitucional,
-          b.jerarquiaNormativa,
-          b.dependencia,
-          b.asistenciaJurisdiccional,
-          b.alcanceProceso,
-          b.alcanceFuero,
-          b.presenciaTerritorial,
-          b.gradoImplementacion,
-        ],
-      )
-      return rows[0]
+
+      // FR-013: un preguntaCodigo desconocido debe rechazarse con un error
+      // de cliente identificable — un INSERT con pregunta_id NULL violaría
+      // un NOT NULL (SQLSTATE 23502), no un trigger (P0001), así que no lo
+      // detectaría esRechazoDeTrigger (US3). Se valida antes de tocar nada.
+      const codigosPreguntas = [...new Set(request.body.respuestas.map((r) => r.preguntaCodigo))]
+      if (codigosPreguntas.length > 0) {
+        const { rows: existentes } = await pool.query<{ codigo: string }>(
+          'SELECT codigo FROM taxonomia_preguntas WHERE codigo = ANY($1)',
+          [codigosPreguntas],
+        )
+        const encontrados = new Set(existentes.map((e) => e.codigo))
+        const desconocidos = codigosPreguntas.filter((c) => !encontrados.has(c))
+        if (desconocidos.length > 0) {
+          return reply.code(400).send({ error: `Pregunta(s) inexistente(s): ${desconocidos.join(', ')}` })
+        }
+      }
+
+      try {
+        await conTransaccion(pool, async (client: pg.PoolClient) => {
+          await client.query('DELETE FROM evaluaciones_taxonomicas WHERE organismo_id = $1', [orgId])
+
+          for (const r of request.body.respuestas) {
+            if (r.opcionesCodigos) {
+              for (const opcionCodigo of r.opcionesCodigos) {
+                await client.query(
+                  `INSERT INTO evaluaciones_taxonomicas (organismo_id, pregunta_id, opcion_id)
+                   SELECT $1,
+                          (SELECT id FROM taxonomia_preguntas WHERE codigo = $2),
+                          (SELECT o.id FROM taxonomia_opciones o
+                             JOIN taxonomia_preguntas p ON p.id = o.pregunta_id
+                            WHERE p.codigo = $2 AND o.codigo = $3)`,
+                  [orgId, r.preguntaCodigo, opcionCodigo],
+                )
+              }
+            } else if (r.valorNumero !== undefined) {
+              await client.query(
+                `INSERT INTO evaluaciones_taxonomicas (organismo_id, pregunta_id, valor_numero)
+                 SELECT $1, (SELECT id FROM taxonomia_preguntas WHERE codigo = $2), $3`,
+                [orgId, r.preguntaCodigo, r.valorNumero],
+              )
+            } else if (r.valorTexto !== undefined) {
+              await client.query(
+                `INSERT INTO evaluaciones_taxonomicas (organismo_id, pregunta_id, valor_texto)
+                 SELECT $1, (SELECT id FROM taxonomia_preguntas WHERE codigo = $2), $3`,
+                [orgId, r.preguntaCodigo, r.valorTexto],
+              )
+            }
+          }
+        })
+      } catch (err) {
+        // T009 (US3): un rechazo de trigger (FR-007/FR-006/FR-004/FR-008,
+        // y desde 0003 también Protección A) vuelve como 400 identificable,
+        // nunca 500 (D11). Cualquier otro error sigue siendo un 500 genuino.
+        if (esRechazoDeTrigger(err)) {
+          return reply.code(400).send({ error: err.message })
+        }
+        throw err
+      }
+
+      return obtenerTaxonomiaOrganismo(orgId)
     },
   )
 }

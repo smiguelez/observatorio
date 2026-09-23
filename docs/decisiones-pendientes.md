@@ -254,3 +254,50 @@ tenga que volver a auditar el código para descubrirlo.
 *No bloquea el cierre de la feature* (SHOULD, no MUST) — sí bloquea marcar
 T038 como completo en `tasks.md`; queda registrado como "no implementado",
 no como "hecho".
+
+---
+
+**D11 — Endpoint de taxonomía roto por la migración de esquema de 003 (2026-09-22).**
+
+`PUT /api/organismos/:orgId/taxonomia` (feature `002-backend-api-carga-datos`)
+falla con error de columna inexistente desde que se aplicó la migración
+`0001_taxonomia_parametrizable` de `003-taxonomia-parametrizable`
+(`evaluaciones_taxonomicas` dejó de tener las 9 columnas fijas que ese
+endpoint asume). `GET` en la misma ruta no tira error, pero devuelve una
+forma de datos incorrecta (`rows[0]`, de cuando la tabla tenía una fila por
+organismo; ahora tiene varias filas por organismo).
+
+*Por qué no se detectó antes:* no existe `taxonomia.test.ts` en la suite de
+`002-backend-api-carga-datos` — nunca hubo cobertura de test para este
+endpoint, desde su creación. El punto ciego es anterior a la feature 003;
+recién se hizo visible al verificar el Independent Test de US3 de esa
+feature.
+
+*No bloquea el cierre de `003`* (fuera de su alcance declarado: modelo de
+datos, no API) — **sí bloquea cualquier uso real de la app antes del corte
+a producción**, dado que no hay despliegue real afectado hoy (la app en
+producción sigue siendo la vieja, sin tocar). Se resuelve como parte del
+trabajo de backend sobre taxonomía (feature futura o fast-follow inmediato
+a continuación de 003), con su propio test — no se corrige dentro de 003.
+
+---
+
+**D12 — `evaluaciones_taxonomicas_v1_legacy` queda como respaldo auditable, sin fecha de borrado (003-taxonomia-parametrizable, 2026-09-22).**
+
+La migración `0001_taxonomia_parametrizable` renombra la tabla vieja de 9
+columnas (`evaluaciones_taxonomicas`) a `evaluaciones_taxonomicas_v1_legacy`
+en vez de borrarla — queda en `public.*` con sus 89 filas intactas,
+sin uso por ningún código de aplicación. Es una decisión deliberada
+(`research.md` de `003-taxonomia-parametrizable`, Decisión 4), no un olvido:
+la reconciliación automática de la migración valida *cantidad*
+(origen=destino=801), no necesariamente cada valor individual sin una
+auditoría manual adicional — conservar la tabla vieja un ciclo más permite
+esa auditoría sin depender de un backup externo, a un costo casi nulo (89
+filas).
+
+*Decisión pendiente, explícitamente fuera de esta feature:* cuándo (o si)
+borrar `evaluaciones_taxonomicas_v1_legacy`. No es una decisión de `003` —
+esa feature solo la crea y la deja disponible. Corresponde a una migración
+posterior, después de que exista suficiente confianza (auditoría manual,
+uso real en producción sin discrepancias reportadas) de que la migración a
+la tabla de respuestas parametrizable fue completa y correcta.

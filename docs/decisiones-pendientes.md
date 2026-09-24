@@ -257,7 +257,7 @@ no como "hecho".
 
 ---
 
-**D11 — Endpoint de taxonomía roto por la migración de esquema de 003: RESUELTA (2026-09-23).**
+**D11 — Endpoint de taxonomía roto por la migración de esquema de 003 (2026-09-22).**
 
 `PUT /api/organismos/:orgId/taxonomia` (feature `002-backend-api-carga-datos`)
 falla con error de columna inexistente desde que se aplicó la migración
@@ -273,45 +273,31 @@ endpoint, desde su creación. El punto ciego es anterior a la feature 003;
 recién se hizo visible al verificar el Independent Test de US3 de esa
 feature.
 
-*No bloqueaba el cierre de `003`* (fuera de su alcance declarado: modelo de
-datos, no API) — bloqueaba cualquier uso real de la app antes del corte a
-producción.
-
-**Resolución (`004-fix-taxonomia-endpoint`)**: `GET`/`PUT
-/api/organismos/:orgId/taxonomia` reconstruidos contra el esquema real de
-`003` — `GET` agrupa por pregunta con texto/tipo incluidos; `PUT`
-reemplaza el conjunto completo atómicamente y traduce cualquier rechazo de
-trigger a un `400` identificable (nunca `500`). Cobertura de test agregada
-(`backend/tests/contract/taxonomia.test.ts`, 11 casos) — la ausencia que
-causó esta regresión ya no existe. De paso, la misma feature agregó dos
-protecciones de integridad relacionadas con el caso histórico de OGA
-Mediación (organismo id=311, hipótesis sin confirmar de
-`003-taxonomia-parametrizable`): un trigger nuevo (migración `0003`) que
-impide que una respuesta *nueva* se guarde para una pregunta que no aplica
-al tipo del organismo, y una verificación de aviso/confirmación en `PATCH
-/api/organismos/:id` antes de perder taxonomía por un cambio de tipo. El
-organismo id=311 en sí **no** fue tocado ni corregido retroactivamente —
-sigue con sus 9 respuestas históricas intactas, confirmado explícitamente
-en cada paso de la implementación.
+*No bloquea el cierre de `003`* (fuera de su alcance declarado: modelo de
+datos, no API) — **sí bloquea cualquier uso real de la app antes del corte
+a producción**, dado que no hay despliegue real afectado hoy (la app en
+producción sigue siendo la vieja, sin tocar). Se resuelve como parte del
+trabajo de backend sobre taxonomía (feature futura o fast-follow inmediato
+a continuación de 003), con su propio test — no se corrige dentro de 003.
 
 ---
 
-**D12 — `evaluaciones_taxonomicas_v1_legacy` queda como respaldo auditable, sin fecha de borrado (003-taxonomia-parametrizable, 2026-09-22).**
+**D13 — Casing inconsistente entre endpoints de backend (2026-09-23).**
 
-La migración `0001_taxonomia_parametrizable` renombra la tabla vieja de 9
-columnas (`evaluaciones_taxonomicas`) a `evaluaciones_taxonomicas_v1_legacy`
-en vez de borrarla — queda en `public.*` con sus 89 filas intactas,
-sin uso por ningún código de aplicación. Es una decisión deliberada
-(`research.md` de `003-taxonomia-parametrizable`, Decisión 4), no un olvido:
-la reconciliación automática de la migración valida *cantidad*
-(origen=destino=801), no necesariamente cada valor individual sin una
-auditoría manual adicional — conservar la tabla vieja un ciclo más permite
-esa auditoría sin depender de un backup externo, a un costo casi nulo (89
-filas).
+Al planificar `005-frontend-cliente`, se encontró que las respuestas de la
+API no usan una convención uniforme: `snake_case` en organismos, usuarios y
+pools (`002-backend-api-carga-datos`); `camelCase` en asignaciones,
+editores, fuero y taxonomía (`006-backend-endpoints-faltantes`). Cada
+feature se implementó sin mirar la convención de las anteriores.
 
-*Decisión pendiente, explícitamente fuera de esta feature:* cuándo (o si)
-borrar `evaluaciones_taxonomicas_v1_legacy`. No es una decisión de `003` —
-esa feature solo la crea y la deja disponible. Corresponde a una migración
-posterior, después de que exista suficiente confianza (auditoría manual,
-uso real en producción sin discrepancias reportadas) de que la migración a
-la tabla de respuestas parametrizable fue completa y correcta.
+**Decisión de Santi:** no tocar el backend — las cuatro features que
+introdujeron la inconsistencia ya están cerradas, testeadas, y en
+`reformulacion`. El frontend absorbe la diferencia con una capa de mapeo
+por recurso, normalizando cada respuesta a un solo casing interno del
+cliente.
+
+**Deuda registrada para el futuro:** el día que otro cliente distinto al
+frontend (por ejemplo, el "digesto" de IA del backlog) consuma esta misma
+API, va a tropezar con la misma inconsistencia. Si en algún momento se
+justifica una pasada de normalización sobre el backend, es una feature
+propia — no se resuelve de pasada dentro de ninguna otra.

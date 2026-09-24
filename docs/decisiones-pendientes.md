@@ -301,3 +301,36 @@ frontend (por ejemplo, el "digesto" de IA del backlog) consuma esta misma
 API, va a tropezar con la misma inconsistencia. Si en algún momento se
 justifica una pasada de normalización sobre el backend, es una feature
 propia — no se resuelve de pasada dentro de ninguna otra.
+
+---
+
+**D14 — Alta de usuarios sin control administrativo: gap de seguridad activo, resuelto por diseño (2026-09-24).**
+
+Hoy cualquiera puede crear una cuenta por contraseña (ruta de Better Auth
+expuesta), Google, o magic link con cualquier email — no hay ningún
+control de "solo un admin crea usuarios" a nivel de backend, pese a que
+esa es la intención declarada del sistema (Santi, `005-frontend-cliente`).
+El frontend no ofrecer una pantalla de registro NO cierra esta puerta,
+porque la API sigue aceptando altas directas.
+
+**Decisión (opción 1, confirmada por Santi):** el intento de ingreso de un
+email no provisionado por un admin se **rechaza** — un hook de Better Auth
+(mismo mecanismo ya usado para fijar `auth.user.id`, `002-backend-api-carga-datos`
+Decisión 3) verifica si el email existe en `usuarios` antes de permitir la
+creación de identidad; si no existe, aborta con un mensaje claro. Se
+resuelve en `007`, antes que cambio de rol o fijar contraseña — es la
+primera prioridad de esa feature.
+
+**Descartada por ahora, no por inviable — a backlog (opción 2):** en vez
+de un simple rechazo, ofrecer un formulario de "solicitud de acceso"
+(email + provincia) que un admin revisa y aprueba. Evaluado como
+demasiado costoso para el volumen actual (47 usuarios en todo el
+sistema): requiere una tabla nueva, tres endpoints con su propia
+autorización, la primera pantalla **pública sin autenticación** de toda la
+app (con las preocupaciones de spam/rate-limiting que eso conlleva), y —
+el costo más grande — infraestructura real de envío de email para avisar
+la aprobación, que hoy no existe (ni siquiera el magic link envía correo
+real, solo lo loguea en consola). No se pierde nada por construir la
+opción 1 ahora: el chequeo de "¿está provisionado?" es el mismo en ambas,
+solo cambia qué pasa cuando la respuesta es no — la opción 2 puede
+agregarse después sin rehacer la 1.

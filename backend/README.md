@@ -154,6 +154,36 @@ Dos protecciones de integridad nuevas, relacionadas con un caso real
   ella, el pedido se rechaza listando qué se perdería. Sin ningún
   mecanismo de historial/archivado de lo eliminado — decisión explícita.
 
+## Catálogos y asignaciones faltantes (`006-backend-endpoints-faltantes`)
+
+`005-frontend-cliente` verificó que 5 grupos de datos no tenían ningún
+endpoint — bloqueaba directamente 4 de sus historias de usuario. Esta
+feature los agrega, **sin ninguna migración de esquema** (las 12
+tablas/vista ya existían completas — `research.md`, Decisión 1):
+
+- `GET /api/provincias`, `/api/denominaciones-simplificadas`,
+  `/api/tipos-oficina`, `/api/tipos-uf`, `/api/fueros` — catálogos de
+  referencia, solo lectura, cualquier autenticado (`src/routes/catalogos.ts`).
+- `GET /api/organismos/:orgId/fuero` — detalle de fueros +
+  `fuero_simplificado` (D3), solo lectura.
+- `GET/POST/PATCH/DELETE /api/organismos/:orgId/unidades-funcionales/:ufId/asignaciones-jueces(/:asignacionId)` —
+  asignación de jueces por UF (D8: exclusivo, pool completo, o
+  subconjunto, cada uno con su cantidad).
+- `GET/POST/DELETE /api/organismos/:orgId/editores(/:usuarioId)` —
+  gestión de editores, restringida a propietario o admin (no a editores
+  entre sí).
+- `GET /api/taxonomia/preguntas[?tipoOficinaId=]` — catálogo completo de
+  preguntas de taxonomía (`src/routes/taxonomia.ts`), distinto del
+  endpoint de respuestas de `004` (que solo devuelve lo ya respondido).
+
+Las reglas de integridad de las asignaciones de jueces y de los editores
+ya estaban garantizadas por el esquema (`UNIQUE`/`CHECK`/`FK`, sin
+triggers propios) — `src/http/trigger-error.ts` se generalizó
+(`esRechazoDeIntegridad`, `mensajeDeIntegridad`) para traducir esos
+rechazos a un `400` identificable, el mismo problema que `004` (D11) ya
+había resuelto para triggers con `RAISE EXCEPTION`, ahora también para
+constraints declarativos simples.
+
 ## Limitaciones conocidas (deuda reconocida, no silenciosa)
 
 - **Rate limiting de login fallido no implementado** (Principio IV, SHOULD

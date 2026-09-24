@@ -15,7 +15,8 @@ import { Type, type Static } from '@sinclair/typebox'
 import type pg from 'pg'
 import { getPgPool } from '../db/pool.js'
 import { conTransaccion } from '../db/transaction.js'
-import { esRechazoDeTrigger } from '../http/trigger-error.js'
+import { esRechazoDeTrigger, esRechazoDeIntegridad, mensajeDeIntegridad } from '../http/trigger-error.js'
+import { esAdmin } from '../authz/rules.js'
 import { buscarOrganismoParaAutorizar, puedeGestionarOrganismo } from '../authz/organismos.js'
 
 const CrearOrganismoBody = Type.Object({
@@ -34,6 +35,27 @@ const ActualizarOrganismoBody = Type.Object({
   confirmarPerdidaTaxonomia: Type.Optional(Type.Boolean()),
 })
 type ActualizarOrganismoBody = Static<typeof ActualizarOrganismoBody>
+
+// T008 (006-backend-endpoints-faltantes, US3): asignación de jueces de
+// una UF a un pool (D8) — solo cantidadAsignada es editable in place;
+// cambiar el pool de una asignación existente es borrar y crear una
+// nueva (data-model.md).
+const CrearAsignacionJuecesBody = Type.Object({
+  grupoJuecesId: Type.Integer(),
+  cantidadAsignada: Type.Integer(),
+})
+type CrearAsignacionJuecesBody = Static<typeof CrearAsignacionJuecesBody>
+
+const ActualizarAsignacionJuecesBody = Type.Object({
+  cantidadAsignada: Type.Integer(),
+})
+type ActualizarAsignacionJuecesBody = Static<typeof ActualizarAsignacionJuecesBody>
+
+// T013 (US4): agregar un editor por id de usuario.
+const AgregarEditorBody = Type.Object({
+  usuarioId: Type.Integer(),
+})
+type AgregarEditorBody = Static<typeof AgregarEditorBody>
 
 const CrearUFBody = Type.Object({
   denominacionUnidad: Type.String({ minLength: 1 }),
@@ -331,6 +353,102 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
     reply.code(204)
   })
 
+  // --- Asignaciones de jueces por UF (006-backend-endpoints-faltantes, US3, D8) ---
+
+  async function verificarUF(orgId: number, ufId: number): Promise<boolean> {
+    const { rows } = await pool.query('SELECT 1 FROM unidades_funcionales WHERE id = $1 AND organismo_id = $2', [
+      ufId,
+      orgId,
+    ])
+    return rows.length > 0
+  }
+
+  app.get('/api/organismos/:orgId/unidades-funcionales/:ufId/asignaciones-jueces', async (request, reply) => {
+    const orgId = await autorizarContraOrganismoPadre(request, reply)
+    if (orgId === null) return
+    const ufId = idParam(request, 'ufId')
+    if (!(await verificarUF(orgId, ufId))) return reply.code(404).send({ error: 'No encontrado' })
+
+    const { rows } = await pool.query(
+      'SELECT id, grupo_jueces_id AS "grupoJuecesId", cantidad_asignada AS "cantidadAsignada" FROM unidad_funcional_grupo_jueces WHERE unidad_funcional_id = $1 ORDER BY id',
+      [ufId],
+    )
+    return rows
+  })
+
+  app.post<{ Body: CrearAsignacionJuecesBody }>(
+    '/api/organismos/:orgId/unidades-funcionales/:ufId/asignaciones-jueces',
+    { schema: { body: CrearAsignacionJuecesBody } },
+    async (request, reply) => {
+      const orgId = await autorizarContraOrganismoPadre(request, reply)
+      if (orgId === null) return
+      const ufId = idParam(request, 'ufId')
+      if (!(await verificarUF(orgId, ufId))) return reply.code(404).send({ error: 'No encontrado' })
+
+      try {
+        const { rows } = await pool.query(
+          `INSERT INTO unidad_funcional_grupo_jueces (unidad_funcional_id, grupo_jueces_id, cantidad_asignada)
+           VALUES ($1, $2, $3)
+           RETURNING id, grupo_jueces_id AS "grupoJuecesId", cantidad_asignada AS "cantidadAsignada"`,
+          [ufId, request.body.grupoJuecesId, request.body.cantidadAsignada],
+        )
+        reply.code(201)
+        return rows[0]
+      } catch (err) {
+        if (esRechazoDeIntegridad(err)) {
+          return reply.code(400).send({ error: mensajeDeIntegridad(err) })
+        }
+        throw err
+      }
+    },
+  )
+
+  app.patch<{ Body: ActualizarAsignacionJuecesBody }>(
+    '/api/organismos/:orgId/unidades-funcionales/:ufId/asignaciones-jueces/:asignacionId',
+    { schema: { body: ActualizarAsignacionJuecesBody } },
+    async (request, reply) => {
+      const orgId = await autorizarContraOrganismoPadre(request, reply)
+      if (orgId === null) return
+      const ufId = idParam(request, 'ufId')
+      if (!(await verificarUF(orgId, ufId))) return reply.code(404).send({ error: 'No encontrado' })
+      const asignacionId = idParam(request, 'asignacionId')
+
+      try {
+        const { rows } = await pool.query(
+          `UPDATE unidad_funcional_grupo_jueces SET cantidad_asignada = $3
+           WHERE id = $1 AND unidad_funcional_id = $2
+           RETURNING id, grupo_jueces_id AS "grupoJuecesId", cantidad_asignada AS "cantidadAsignada"`,
+          [asignacionId, ufId, request.body.cantidadAsignada],
+        )
+        if (rows.length === 0) return reply.code(404).send({ error: 'No encontrado' })
+        return rows[0]
+      } catch (err) {
+        if (esRechazoDeIntegridad(err)) {
+          return reply.code(400).send({ error: mensajeDeIntegridad(err) })
+        }
+        throw err
+      }
+    },
+  )
+
+  app.delete(
+    '/api/organismos/:orgId/unidades-funcionales/:ufId/asignaciones-jueces/:asignacionId',
+    async (request, reply) => {
+      const orgId = await autorizarContraOrganismoPadre(request, reply)
+      if (orgId === null) return
+      const ufId = idParam(request, 'ufId')
+      if (!(await verificarUF(orgId, ufId))) return reply.code(404).send({ error: 'No encontrado' })
+      const asignacionId = idParam(request, 'asignacionId')
+
+      const resultado = await pool.query(
+        'DELETE FROM unidad_funcional_grupo_jueces WHERE id = $1 AND unidad_funcional_id = $2',
+        [asignacionId, ufId],
+      )
+      if (resultado.rowCount === 0) return reply.code(404).send({ error: 'No encontrado' })
+      reply.code(204)
+    },
+  )
+
   // --- Taxonomía (FR-014, 1:1 con el organismo; 004-fix-taxonomia-endpoint) ---
 
   // T002 (Foundational): consulta compartida entre GET (US1) y la respuesta
@@ -451,4 +569,103 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
       return obtenerTaxonomiaOrganismo(orgId)
     },
   )
+
+  // --- Fuero (006-backend-endpoints-faltantes, US2 — solo lectura) ---
+
+  app.get('/api/organismos/:orgId/fuero', async (request, reply) => {
+    const orgId = await autorizarContraOrganismoPadre(request, reply)
+    if (orgId === null) return
+
+    const { rows: fueros } = await pool.query<{ id: number; nombre: string }>(
+      `SELECT f.id, f.nombre
+         FROM organismo_fueros ofu
+         JOIN fueros f ON f.id = ofu.fuero_id
+        WHERE ofu.organismo_id = $1
+        ORDER BY f.id`,
+      [orgId],
+    )
+    const { rows: simplificado } = await pool.query<{ fuero_simplificado: string | null }>(
+      'SELECT fuero_simplificado FROM vista_fuero_simplificado WHERE organismo_id = $1',
+      [orgId],
+    )
+
+    return { fueros, fueroSimplificado: simplificado[0]?.fuero_simplificado ?? null }
+  })
+
+  // --- Editores de organismo (006-backend-endpoints-faltantes, US4) ---
+
+  // T013: helper propio, NO autorizarContraOrganismoPadre — FR-013 pide
+  // una regla más angosta (propietario o admin, sin editor) que la del
+  // resto de las subrutas de organismo. research.md, Decisión 4: se
+  // compone acá mismo con las primitivas ya existentes (esAdmin +
+  // comparación directa contra propietarioId), sin ninguna función nueva
+  // en authz/rules.ts.
+  async function autorizarPropietarioOAdmin(
+    request: { params: unknown; identidad?: unknown },
+    reply: { code: (n: number) => { send: (b: unknown) => void } },
+  ) {
+    const orgId = idParam(request, 'orgId')
+    const organismo = await buscarOrganismoParaAutorizar(pool, orgId)
+    if (!organismo) {
+      reply.code(404).send({ error: 'Organismo no encontrado' })
+      return null
+    }
+    const identidad = request.identidad as { usuarioId: bigint; rol: string }
+    if (identidad.usuarioId !== organismo.propietarioId && !esAdmin(identidad as never)) {
+      reply.code(403).send({ error: 'No autorizado' })
+      return null
+    }
+    return orgId
+  }
+
+  app.get('/api/organismos/:orgId/editores', async (request, reply) => {
+    const orgId = await autorizarContraOrganismoPadre(request, reply)
+    if (orgId === null) return
+
+    const { rows } = await pool.query(
+      `SELECT u.id AS "usuarioId", u.nombre_display AS "nombre", u.email
+         FROM organismo_editores oe
+         JOIN usuarios u ON u.id = oe.usuario_id
+        WHERE oe.organismo_id = $1
+        ORDER BY u.id`,
+      [orgId],
+    )
+    return rows
+  })
+
+  app.post<{ Body: AgregarEditorBody }>(
+    '/api/organismos/:orgId/editores',
+    { schema: { body: AgregarEditorBody } },
+    async (request, reply) => {
+      const orgId = await autorizarPropietarioOAdmin(request, reply)
+      if (orgId === null) return
+
+      try {
+        await pool.query('INSERT INTO organismo_editores (organismo_id, usuario_id) VALUES ($1, $2)', [
+          orgId,
+          request.body.usuarioId,
+        ])
+        reply.code(201)
+        return { usuarioId: request.body.usuarioId }
+      } catch (err) {
+        if (esRechazoDeIntegridad(err)) {
+          return reply.code(400).send({ error: mensajeDeIntegridad(err) })
+        }
+        throw err
+      }
+    },
+  )
+
+  app.delete('/api/organismos/:orgId/editores/:usuarioId', async (request, reply) => {
+    const orgId = await autorizarPropietarioOAdmin(request, reply)
+    if (orgId === null) return
+    const usuarioId = idParam(request, 'usuarioId')
+
+    const resultado = await pool.query('DELETE FROM organismo_editores WHERE organismo_id = $1 AND usuario_id = $2', [
+      orgId,
+      usuarioId,
+    ])
+    if (resultado.rowCount === 0) return reply.code(404).send({ error: 'No encontrado' })
+    reply.code(204)
+  })
 }

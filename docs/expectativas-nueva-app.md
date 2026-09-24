@@ -66,3 +66,17 @@
 8. **Digesto — motor de IA que responda preguntas sobre la documentación
    de los organismos** (tipo bot). Misma observación que el ítem anterior:
    candidata a feature-spec propia, no a un ítem de backlog.
+
+9. **Solicitud de acceso con aprobación de admin**, en vez de rechazar
+   directamente un intento de ingreso de un email no provisionado (D14,
+   opción 2). El usuario que intenta entrar sin estar dado de alta
+   completaría un formulario público (email + provincia solicitada), que
+   quedaría en un área de solicitudes para que un admin apruebe o
+   rechace. Evaluado y descartado por ahora — no por inviable, sino por
+   costo desproporcionado al volumen actual (47 usuarios en todo el
+   sistema): requiere una tabla nueva, tres endpoints con su propia
+   autorización, la primera pantalla pública sin autenticación de toda la
+   app, e infraestructura real de envío de email (hoy inexistente) para
+   avisar la aprobación. Documentado por si el crecimiento futuro lo
+   justifica — Santi no espera que llegue a implementarse, pero prefiere
+   dejarlo registrado.

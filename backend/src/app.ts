@@ -18,6 +18,8 @@ import { registrarRutasOrganismos } from './routes/organismos.js'
 import { registrarRutasPoolsJueces } from './routes/pools-jueces.js'
 import { registrarRutasUsuarios } from './routes/usuarios.js'
 import { registrarRutasLocalidades } from './routes/localidades.js'
+import { registrarRutasCatalogos } from './routes/catalogos.js'
+import { registrarRutasTaxonomia } from './routes/taxonomia.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -48,6 +50,15 @@ export async function buildApp() {
 
   // T036 (US5): catálogo de localidades, solo lectura.
   await app.register(registrarRutasLocalidades)
+
+  // T003 (006-backend-endpoints-faltantes, US1): catálogos de referencia
+  // (provincias, denominaciones simplificadas, tipos de oficina, tipos de
+  // UF, fueros), solo lectura.
+  await app.register(registrarRutasCatalogos)
+
+  // T011 (006-backend-endpoints-faltantes, US5): catálogo de preguntas de
+  // taxonomía, filtrable por tipo de organismo, solo lectura.
+  await app.register(registrarRutasTaxonomia)
 
   // Rutas de Better Auth (FR-005): login/logout, callback de Google,
   // solicitud/verificación de magic link. Se configuran los proveedores

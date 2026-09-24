@@ -1,8 +1,9 @@
 # Contrato consumido: formas reales de las respuestas del backend
 
 Feature `005-frontend-cliente`. Este documento **no define** endpoints —
-fija la forma exacta que el cliente espera y cómo la normaliza. Fuente: código
-de `reformulacion` (`backend/src/routes/*.ts`), leído el 2026-09-23. Los
+fija la forma exacta que el cliente espera (la forma "wire") y cómo la
+normaliza la capa de mapeo (D13; research.md, Decisión 4). Fuente: código de
+`backend/src/routes/*.ts` (con `006` ya mergeada), releído el 2026-09-24. Los
 `contracts/api.md` de `002`/`004`/`006` documentan rutas y autorización pero
 **no** la forma de las respuestas; ante una divergencia gana el código y se
 corrige este archivo.
@@ -12,29 +13,33 @@ Convenciones del cliente
 - Errores: `{ "error": string }` (+ `preguntasQueSePerderian` en un caso). Los
   de Better Auth (`/api/auth/*`) son `{ code, message }`.
 - `204` = sin cuerpo (DELETE): no llamar `.json()`.
-- `UsuarioId` = `string` (bigint serializado); en cuerpos de `POST` se envía
-  `Number(id)`.
-- "snake" = la respuesta viene en snake_case y el mapper la pasa a camelCase.
+- **Mapeo (D13)**: cada respuesta pasa por un esquema zod por recurso que la
+  valida, la pasa a camelCase ("snake" = viene en snake_case) y convierte los
+  **ids de usuario `string → number`** (`usuarios.id` es `bigint` y la API lo
+  serializa como string). Los cuerpos de `POST` ya piden número, así que en
+  el dominio `UsuarioId` es siempre `number`. Un id no entero seguro lanza
+  `ContratoInesperado`.
 
 ## Sesión y autenticación
 
 | Uso | Llamada | Respuesta |
 |---|---|---|
-| Identidad del cliente (rol, provincia) | `GET /api/auth/session` | `200 { usuarioId: string, rol: "usuario_normal"\|"admin", provinciaId: number\|null }` · `401 { error }` |
-| Login contraseña | `authClient.signIn.email({email,password,callbackURL:"/"})` | error `INVALID_EMAIL_OR_PASSWORD` para credencial errónea **y** para credencial revocada (indistinguibles — brecha G2) |
+| Identidad del cliente (rol, provincia) | `GET /api/auth/session` | `200 { usuarioId: string→number, rol: "usuario_normal"\|"admin", provinciaId: number\|null }` · `401 { error }` |
+| Login contraseña | `authClient.signIn.email({email,password,callbackURL:"/"})` | cualquier error → **un único mensaje genérico** (Decisión 2 de la spec); credencial errónea, cuenta inexistente y credencial revocada son indistinguibles por diseño y el cliente no intenta distinguirlos |
 | Login Google | `authClient.signIn.social({provider:"google",callbackURL:"/"})` | `{url, redirect:true}`; el cliente navega a `url` |
-| Magic link (pedir) | `authClient.signIn.magicLink({email,callbackURL:"/",errorCallbackURL:"/login"})` | `200`; el email es un placeholder (G4) |
+| Magic link (pedir) | `authClient.signIn.magicLink({email,callbackURL:"/",errorCallbackURL:"/login"})` | `200`; el email es un placeholder (G4). Tras `007`/D14 un email no provisionado será rechazado: el cliente muestra el mensaje genérico de "no se pudo iniciar sesión" |
 | Magic link (consumir) | navegación a `/api/auth/magic-link/verify?...` | vencido/reusado → `302` a `errorCallbackURL?error=INVALID_TOKEN` |
 | Cerrar sesión | `authClient.signOut()` | — |
 | Métodos vinculados | `authClient.listAccounts()` | lista con `providerId` (`credential`, `google`, …) |
-| Cambiar contraseña | `authClient.changePassword({currentPassword,newPassword})` | solo si existe cuenta `credential` (G3) |
+| Cambiar contraseña | `authClient.changePassword({currentPassword,newPassword})` | solo si existe cuenta `credential`; **no hay** "fijar contraseña" desde el cliente (G3, diferido a `007`) |
+| Registro | — | **No se consume** `/api/auth/sign-up/email` (FR-022). La ruta existe en el backend; cerrarla es D14/`007` |
 
 ## Catálogos (cualquier autenticado, solo lectura, sin paginación)
 
 `GET /api/provincias | /api/denominaciones-simplificadas | /api/tipos-oficina | /api/tipos-uf | /api/fueros`
 → `[{ id: number, nombre: string }]` (orden por `id`).
 
-`GET /api/localidades` → `[{ id, nombre, provincia_id, latitud, longitud }]` (snake; **todas**, sin filtro).
+`GET /api/localidades` → `[{ id, nombre, provincia_id, latitud, longitud }]` (snake; **todas**, sin filtro; el combo de UF se filtra en el cliente por la provincia del organismo).
 
 Se cargan una vez por sesión (`staleTime: Infinity`).
 
@@ -43,9 +48,9 @@ Se cargan una vez por sesión (`staleTime: Infinity`).
 | Llamada | Respuesta |
 |---|---|
 | `GET /api/organismos` | `[{ id: number, denominacion: string, propietario_id: string }]` (snake) — propios + los que edita; admin: todos |
-| `POST /api/organismos` body `{denominacion, denominacionSimplificadaId, tipoOficinaId, provinciaId}` (todos obligatorios, enteros salvo denominación) | `201 { id, denominacion, propietario_id }` · el body no puede fijar propietario |
+| `POST /api/organismos` body `{denominacion, denominacionSimplificadaId, tipoOficinaId, provinciaId}` (todos obligatorios, enteros salvo denominación) | `201 { id, denominacion, propietario_id }` · el body no puede fijar propietario · el backend **no** compara `provinciaId` con la del usuario: que sea fija para `usuario_normal` es UX (decisión 6) |
 | `GET /api/organismos/:id` | `SELECT *` de `organismos` (snake): incluye al menos `id, denominacion, denominacion_simplificada_id, tipo_oficina_id, provincia_id, propietario_id, estado_fueros, actualizado_a, firestore_id`. **Los campos exactos los define `db/schema.sql`; el mapper solo declara los que el cliente usa.** · `403` no autorizado · `404` |
-| `PATCH /api/organismos/:id` body parcial + `confirmarPerdidaTaxonomia?: boolean` | `200 { id, denominacion, propietario_id }` · **`400 { error, preguntasQueSePerderian: [{codigo,texto}] }`** si cambiar `tipoOficinaId` dejaría respuestas sin aplicar y no vino la confirmación (Protección B) |
+| `PATCH /api/organismos/:id` body parcial (incluye `provinciaId`: solo el admin tiene el control en la UI, decisión 6) + `confirmarPerdidaTaxonomia?: boolean` | `200 { id, denominacion, propietario_id }` · **`400 { error, preguntasQueSePerderian: [{codigo,texto}] }`** si cambiar `tipoOficinaId` dejaría respuestas sin aplicar y no vino la confirmación (Protección B) |
 | `DELETE /api/organismos/:id` | `204` · `403` · `404` |
 
 Nota: un organismo ajeno responde `403`, no `404` (no se oculta la existencia).
@@ -76,17 +81,18 @@ Base: `/api/organismos/:orgId/unidades-funcionales/:ufId/asignaciones-jueces`
 
 Cambiar el pool de una asignación = `DELETE` + `POST` (no hay edición in-place del pool).
 
-## Pools de jueces (existente desde `002`)
+## Pools de jueces (existente desde `002`) — solo se consumen desde el diálogo de asignación
 
 `GET /api/pools-jueces` → `[{ id, descripcion, total_jueces, provincia_id }]` (snake; alcance = provincia del usuario, admin: todos).
-`POST {provinciaId, descripcion?, totalJueces (>=0)}` → `201` pool · `403` si la provincia no es la del usuario y no es admin.
-`PATCH /:id {descripcion?, totalJueces?}` · `DELETE /:id` → `204`.
+`POST {provinciaId, descripcion?, totalJueces (>=0)}` → `201` pool · `403` si la provincia no es la del usuario y no es admin. El diálogo envía la provincia del organismo si es admin, la del usuario si no.
+`PATCH /:id {descripcion?, totalJueces?}` → `200` pool.
+`DELETE /:id` → `204`. **Con asignaciones existentes responde `500`** (FK sin `ON DELETE`, ruta sin captura; brecha G6): el cliente lo trata como "no se pudo eliminar, el pool puede estar asignado a otras UF".
 
 ## Editores
 
 | Llamada | Autorización | Respuesta |
 |---|---|---|
-| `GET /api/organismos/:orgId/editores` | propietario/editor/admin | `[{ usuarioId: string, nombre: string\|null, email: string }]` (camel; `nombre` viene de `nombre_display`) |
+| `GET /api/organismos/:orgId/editores` | propietario/editor/admin | `[{ usuarioId: string→number, nombre: string\|null, email: string }]` (camel; `nombre` viene de `nombre_display`) |
 | `POST /api/organismos/:orgId/editores {usuarioId: number}` | **solo propietario o admin** | `201 { usuarioId: number }` · `400` (`"Ese usuario ya es editor de este organismo."` / `"El usuario indicado no existe."`) · `403` a un editor |
 | `DELETE /api/organismos/:orgId/editores/:usuarioId` | propietario o admin | `204` · `404` |
 
@@ -120,9 +126,9 @@ Reemplaza **todo** el conjunto en una transacción (lo omitido se borra). Devuel
 
 ## Usuarios
 
-`GET /api/usuarios` → `[{ id: string, email, nombre_display: string|null, provincia_id: number|null, roles: string[]|null }]` (snake; cualquier autenticado).
+`GET /api/usuarios` → `[{ id: string→number, email, nombre_display: string|null, provincia_id: number|null, roles: string[]|null }]` (snake; cualquier autenticado).
 `GET /api/usuarios/:id` → lo anterior + `email_verificado`, `foto_url`.
-`PATCH /api/usuarios/:id {nombreDisplay?, provinciaId?, fotoUrl?}` (solo el propio o admin) → `200 { id, email, nombre_display, provincia_id, foto_url }`. **No acepta rol** (brecha G1).
+`PATCH /api/usuarios/:id {nombreDisplay?, provinciaId?, fotoUrl?}` (solo el propio o admin) → `200 { id, email, nombre_display, provincia_id, foto_url }`. **No acepta rol** (brecha G1; US9 en solo lectura). No existe endpoint de alta de usuarios (G5).
 
 ## Códigos de estado y su tratamiento en el cliente
 

@@ -1,48 +1,52 @@
 # Implementation Plan: Frontend del Observatorio — cliente que reemplaza la SPA actual
 
-**Branch**: `005-frontend-cliente` | **Date**: 2026-09-23 | **Spec**: [spec.md](./spec.md)
+**Branch**: `005-frontend-cliente` | **Date**: 2026-09-24 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `/specs/005-frontend-cliente/spec.md`
+(incluye Clarifications de la sesión 2026-09-24).
 
 ## Summary
 
 Cliente web nuevo (`frontend/`) que consume el backend de `002`/`003`/`004`/`006`
 sin portar código de la SPA actual. Vite + React + TypeScript + Tailwind v4 +
-shadcn/ui (base Radix), ruteo con React Router, datos con TanStack Query,
-formularios con react-hook-form + zod, auth con el cliente de Better Auth.
+shadcn/ui (base Radix, inicializado con el CLI de shadcn para Vite), React
+Router, TanStack Query, react-hook-form + zod, y el cliente de Better Auth.
 
-Tres decisiones de esta investigación condicionan todo lo demás
-(detalle en [research.md](./research.md)):
+Decisiones técnicas que estructuran todo lo demás (detalle en
+[research.md](./research.md)):
 
-1. **Cookies en desarrollo: proxy de Vite, no CORS.** El backend no tiene CORS
-   ni `trustedOrigins`; un cliente en otro puerto fallaría en el preflight y
-   en el origin check de Better Auth. El cliente usa rutas relativas `/api`,
-   Vite hace proxy sin `changeOrigin`, y el backend corre con
+1. **Cookies en desarrollo: proxy de Vite hacia `/api`, same-origin, sin CORS
+   nuevo en el backend.** Reverificado el 2026-09-24 contra el árbol actual
+   (con `006` mergeada): el backend sigue sin CORS ni `trustedOrigins`, y
+   Better Auth valida el `Origin` de los `POST` con cookie. El proxy debe
+   quedar sin `changeOrigin` y el backend en dev corre con
    `BETTER_AUTH_URL=http://localhost:5173`. Se valida con un spike antes de
    construir pantallas (quickstart, escenario 0).
-2. **shadcn con Vite = Tailwind v4 + `@tailwindcss/vite` + alias en dos
-   tsconfig + `shadcn init --template vite`**, no la receta de Next.js.
-3. **Las formas reales de las respuestas no están en los `contracts/api.md`
-   de `006`** — se leyeron del código y se fijaron en
-   [contracts/consumed-api.md](./contracts/consumed-api.md). Hay casing mixto
-   (snake/camel), ids `bigint` como string, y dos formas distintas para
-   taxonomía (catálogo vs. respuestas) que el formulario debe combinar.
+2. **shadcn con Vite ≠ receta de Next.js**: Tailwind v4 con
+   `@tailwindcss/vite`, alias `@/*` en **dos** tsconfig, `components.json`
+   con `rsc:false`, y `npx shadcn@latest init --template vite`.
+3. **Capa de mapeo por recurso (D13)**: un esquema zod por recurso valida la
+   respuesta, normaliza casing a camelCase y convierte el id de usuario
+   `string → number` — un solo mecanismo. Las pantallas solo ven tipos de
+   dominio.
+4. **Las 7 decisiones de la spec** se reflejan así: US9 solo lectura;
+   mensaje de login único; sin "fijar contraseña"; **sin ruta ni menú de
+   pools** (todo en el diálogo de asignación de una UF); **sin registro**;
+   provincia editable solo para admin; taxonomía sin preguntas aplicables =
+   completa.
 
-**Hallazgo que requiere decisión antes de `/speckit-tasks`**: la verificación
-contra el código real encontró **4 brechas** entre lo que la spec asume y lo
-que el backend permite (research.md, Decisión 5). Dos afectan un FR:
+Hallazgos nuevos de esta corrida (no estaban en la anterior):
 
-- **G1** — no hay endpoint para **cambiar el rol** de un usuario → FR-019 solo
-  se cumple en lectura.
-- **G2/G3** — la revocación de contraseña **no es distinguible** de una
-  contraseña errónea, y **no hay forma de fijar una contraseña nueva** desde
-  el cliente → FR-002 y parte de FR-014 no se pueden cumplir a la letra.
-- G4 — el magic link no se envía por email (ya documentado en `002`).
+- **G5 / D14**: el alta de usuarios no está controlada en el backend; el
+  cliente no ofrece registro, pero el cierre real es de `007`. El cliente
+  queda preparado para el rechazo futuro con un mensaje genérico.
+- **G6**: `DELETE /api/pools-jueces/:id` de un pool asignado responde `500`
+  (FK sin `ON DELETE`, ruta sin captura). El diálogo lo traduce a un mensaje
+  claro; la corrección real es de `007`.
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.x (strict), React 19; Node 20+ para
-tooling.
+**Language/Version**: TypeScript 5.x (strict), React 19; Node 20+ para tooling.
 
 **Primary Dependencies**: Vite 8.3, React 19.3, Tailwind CSS 4.3 +
 `@tailwindcss/vite`, shadcn/ui (CLI 4.21, base `radix`), React Router 8,
@@ -54,32 +58,31 @@ Versiones de `npm view` al 2026-09-23; se fijan en el lockfile.
 **Storage**: N/A — el cliente no persiste datos ni tokens. `localStorage` solo
 para preferencias de UI (tema, sidebar), siempre en try/catch.
 
-**Testing**: Vitest + Testing Library (mappers, esquema dinámico de taxonomía,
-guardas de ruta, componentes); Playwright E2E contra **backend real** y base
-de pruebas (sin mocks del backend — mismo criterio que `backend/`), con
-mocks de red solo para casos no reproducibles (sesión vencida a mitad de
-formulario).
+**Testing**: Vitest + Testing Library (esquemas de mapeo, esquema dinámico de
+taxonomía, guardas, completitud); Playwright E2E contra **backend real** y
+base de pruebas (sin mocks del backend, mismo criterio que `backend/`), con
+mocks de red solo para casos no reproducibles (sesión vencida, `500` del
+borrado de pool, magic link).
 
 **Target Platform**: navegadores evergreen, escritorio primero; utilizable en
 móvil (sidebar → `sheet`).
 
-**Project Type**: web application — frontend nuevo consumiendo un backend
-existente.
+**Project Type**: web application — frontend nuevo sobre un backend existente.
 
-**Performance Goals**: sin metas numéricas en la spec. Regla práctica: lista
-de organismos y formularios interactivos sin recargas completas; la vista de
-completitud admin (≈ 350 requests, 117 organismos) debe mostrar progreso y
-ser usable mientras carga (concurrencia 6).
+**Performance Goals**: sin metas numéricas en la spec. Regla práctica: sin
+recargas completas en flujos interactivos; la vista de completitud admin
+(≈ 250–350 requests para 117 organismos) muestra progreso y es usable
+mientras carga (concurrencia 6; catálogo de taxonomía pedido una vez por tipo).
 
-**Constraints**: 401/403/404 tratados de forma distinta y visible (FR-020,
-FR-021); autorización real solo en el servidor (Principio II); sin secretos
-en el árbol (`VITE_*` no admite secretos — solo la URL pública de DataStudio);
-cliente API con rutas relativas (mismo origen en dev vía proxy y en prod).
+**Constraints**: `401`/`403`/`404` tratados de forma distinta y visible
+(FR-020, FR-021); autorización real solo en el servidor (Principio II);
+rutas relativas `/api` (mismo origen en dev vía proxy y en prod); ningún
+secreto en el árbol (`VITE_*` solo para la URL pública de DataStudio).
 
-**Scale/Scope**: 12 pantallas (login, lista, alta, detalle con 4 pestañas,
-UF + asignaciones, taxonomía, editores, pools, perfil, ajustes, completitud
-admin, usuarios admin) + 403/404; 117 organismos, ~46 usuarios, 24
-jurisdicciones (datos de `001`).
+**Scale/Scope**: 11 pantallas (login, lista, alta, detalle con 4 pestañas,
+UF + diálogo de asignación/pools, taxonomía, editores, perfil, ajustes,
+completitud admin, usuarios admin) + 403/404; 117 organismos, ~47 usuarios,
+24 jurisdicciones.
 
 ## Constitution Check
 
@@ -87,22 +90,23 @@ jurisdicciones (datos de `001`).
 
 | Principio | Estado | Cómo se cumple / nota |
 |---|---|---|
-| I. Soberanía de datos | ✅ | Sin dependencia de GCP en la ruta crítica. DataStudio es **solo un enlace externo** (FR-015), nunca una dependencia funcional: si `VITE_DATASTUDIO_URL` falta o el servicio cae, la app opera igual. |
-| II. Autorización en el servidor | ✅ | Guardas de ruta y controles ocultos son UX; toda operación depende del `401`/`403` del backend y la UI los muestra sin degradar. El campo "propietario" no existe en ningún formulario (FR-004). |
+| I. Soberanía de datos | ✅ | Sin dependencia de GCP en la ruta crítica. DataStudio es solo un enlace externo (FR-015): si `VITE_DATASTUDIO_URL` falta o el servicio cae, la app opera igual. |
+| II. Autorización en el servidor | ✅ | Guardas de ruta y controles deshabilitados son UX; toda operación depende del `401`/`403` del backend, que la UI muestra sin degradar. "Provincia fija" y "sin `/pools`" son UX, no control de acceso. No existe campo "propietario" (FR-004). |
 | III. Autenticación plural | ✅ | Tres métodos, ninguno prerequisito de otro; la pantalla no oculta uno si otro falla. |
-| IV. Credenciales/tokens seguros | ✅ | Cookie `httpOnly` manejada por el navegador; nada de tokens en JS ni storage; magic link de un solo uso lo resuelve el backend. El cliente nunca loguea contraseñas. |
-| V. Identidad unificada | ✅ con nota | No se agrega pantalla de registro con contraseña (G/Dec. 8) para no crear cuentas no verificadas. Confirmar. |
-| VI. Modelo de autorización desde la fuente | N/A | No se redefinen reglas; el cliente refleja las del backend (p. ej. editor sin permiso sobre editores, research Dec. 5). |
-| VII. Esquema sobre datos verificados | ✅ | Formas de respuesta leídas del código real, no supuestas; brechas documentadas con evidencia. Lo no verificable sin correr el sistema está marcado "a validar en quickstart". |
-| VIII. Integridad referencial | N/A | Sin esquema propio. |
-| IX. Migración por partes | ✅ | `frontend/` nuevo, `src/` intacto y operativo; corte de despliegue fuera de esta feature. |
-| X. Cero pérdida de datos | N/A | Sin migración de datos. Nota: el `PUT` de taxonomía **reemplaza** el conjunto; el formulario siempre envía el conjunto completo para no borrar respuestas por omisión. |
+| IV. Credenciales y tokens seguros | ✅ | Cookie `httpOnly` gestionada por el navegador; sin tokens en JS ni storage; el cliente no loguea contraseñas. El mensaje de login único **refuerza** el principio (no revela existencia ni estado de la cuenta — FR-002). |
+| V. Identidad unificada | ✅ | El cliente no crea identidades: sin pantalla de registro (FR-022). Que el backend aún acepte altas directas es **D14** (resuelta por diseño, a implementar en `007`); el frontend no es una barrera (Principio II) y no se presenta como tal. |
+| VI. Autorización desde la fuente | N/A | No se redefinen reglas; el cliente refleja las del backend (p. ej. un editor no gestiona editores). |
+| VII. Esquema sobre datos verificados | ✅ | Formas de respuesta leídas del código real; el esquema zod detecta deriva en ejecución; brechas G1–G6 con evidencia. Lo no verificable sin correr el sistema está marcado *"a validar en quickstart"*. |
+| VIII. Integridad referencial | N/A | Sin esquema propio. El hallazgo G6 (FK sin `ON DELETE`) se documenta, no se corrige acá. |
+| IX. Migración por partes | ✅ | `frontend/` nuevo; `src/` intacto y operativo; el corte de despliegue queda fuera. |
+| X. Cero pérdida de datos | ✅ | Sin migración. El `PUT` de taxonomía **reemplaza** el conjunto: el formulario siempre envía el conjunto completo y las pruebas E2E verifican que guardar no borra respuestas existentes. |
 | XI. Código muerto no se migra | ✅ | Nada de `src/` se reutiliza. |
-| XII. Trazabilidad | ✅ | research.md cita fuente/fecha por decisión; las desviaciones de la spec (G1–G3) están registradas con qué hace el backend y por qué. |
-| XIII. Secretos fuera del árbol | ✅ | Solo `VITE_DATASTUDIO_URL` (pública) en `.env.local`; credenciales de Google/DB pertenecen al backend por variables de entorno. |
+| XII. Trazabilidad | ✅ | research.md cita fuente y fecha por decisión; las desviaciones y aplazamientos (G1–G6) registran qué hace el backend y por qué. |
+| XIII. Secretos fuera del árbol | ✅ | Solo `VITE_DATASTUDIO_URL` (pública) en `.env.local`; credenciales de Google y base pertenecen al backend por variables de entorno. |
 
-**Re-evaluación post-diseño (Phase 1)**: sin violaciones nuevas. Los puntos
-abiertos abajo son decisiones de alcance, no violaciones.
+**Re-evaluación post-diseño (Phase 1)**: sin violaciones nuevas. El diseño
+del diálogo de pools (decisión 4) no crea ninguna superficie de acceso nueva:
+usa los endpoints de `002` con su autorización por provincia.
 
 ## Project Structure
 
@@ -112,10 +116,10 @@ abiertos abajo son decisiones de alcance, no violaciones.
 specs/005-frontend-cliente/
 ├── plan.md                 # este archivo
 ├── research.md             # Phase 0
-├── data-model.md           # Phase 1 (tipos y estado del cliente)
-├── quickstart.md           # Phase 1 (escenarios de validación)
+├── data-model.md           # Phase 1 (tipos, mapeo, validaciones, estado)
+├── quickstart.md           # Phase 1 (27 escenarios de validación)
 ├── contracts/
-│   ├── consumed-api.md     # formas reales de respuesta de cada endpoint
+│   ├── consumed-api.md     # forma wire de cada endpoint + mapeo
 │   └── routes.md           # rutas, guardas, pantallas
 ├── checklists/requirements.md
 └── tasks.md                # Phase 2 (/speckit-tasks — no lo crea este comando)
@@ -127,60 +131,61 @@ specs/005-frontend-cliente/
 frontend/
 ├── index.html
 ├── package.json / package-lock.json
-├── vite.config.ts              # plugins react + tailwind, alias @, proxy /api
+├── vite.config.ts              # plugins react + tailwind, alias @, proxy /api (sin changeOrigin)
 ├── tsconfig.json / tsconfig.app.json   # alias @/* en AMBOS
 ├── components.json             # shadcn (rsc:false, tailwind.config:"")
 ├── .env.example                # VITE_DATASTUDIO_URL (sin secretos)
 ├── src/
 │   ├── main.tsx · App.tsx · index.css        # @import "tailwindcss"
-│   ├── api/                    # cliente fetch + un módulo por recurso + mappers snake→camel
-│   │   ├── http.ts             # rutas relativas, manejo 204/401/403, error tipado
+│   ├── api/                    # cliente fetch + un módulo por recurso, cada uno con su esquema zod (wire → dominio)
+│   │   ├── http.ts             # rutas relativas, manejo de 204/401/403, error tipado
+│   │   ├── ids.ts              # usuarioIdDesdeWire (string → number, safe integer)
 │   │   ├── auth-client.ts      # better-auth/client + magicLinkClient
 │   │   └── organismos.ts · unidades.ts · asignaciones.ts · pools.ts · editores.ts
 │   │       taxonomia.ts · usuarios.ts · catalogos.ts · sesion.ts
 │   ├── auth/                   # useSesion, guardas RequireAuth / RequireAdmin
 │   ├── routes/                 # una carpeta por pantalla (login, organismos, admin, perfil…)
 │   ├── features/
-│   │   ├── taxonomia/          # construcción del esquema zod y controles por tipoRespuesta
-│   │   ├── asignaciones/       # atajos exclusivo / pool completo / subconjunto
+│   │   ├── taxonomia/          # esquema zod en runtime y controles por tipoRespuesta
+│   │   ├── asignaciones/       # diálogo de asignación de jueces: asignar + gestionar pools (único lugar)
 │   │   └── completitud/        # fan-out con concurrencia + export PDF
 │   ├── components/
 │   │   ├── ui/                 # generados por shadcn
 │   │   └── layout/             # sidebar, menú de usuario, breadcrumbs
 │   └── lib/utils.ts            # cn()
 └── tests/
-    ├── unit/                   # mappers, esquema taxonomía, guardas
+    ├── unit/                   # esquemas de mapeo, esquema de taxonomía, guardas, completitud
     └── e2e/                    # Playwright contra backend real
 
-backend/     # sin cambios (dependencias: ver Riesgos)
+backend/     # sin cambios
 src/         # SPA vieja, sin cambios
 ```
 
-**Structure Decision**: Option 2 (web application) con `frontend/` nuevo al
-lado de `backend/` y la SPA vieja intacta (research.md, Decisión 1).
+**Structure Decision**: web application con `frontend/` nuevo al lado de
+`backend/` y la SPA vieja intacta (research.md, Decisión 1). No hay
+`routes/pools` ni `routes/registro` a propósito.
 
 ## Riesgos y dependencias fuera de esta feature
 
 | Riesgo / dependencia | Efecto | Mitigación |
 |---|---|---|
-| Rama sin `006` | No se puede correr el sistema completo | `git merge reformulacion` antes de implementar |
-| G1 sin endpoint de rol | US9 queda en lectura | Proponer `007-backend-...` (rol + fijar contraseña) |
-| G2/G3 (contraseña) | FR-002 cumplido de forma aproximada; sin "fijar contraseña nueva" | Mensaje ante cualquier fallo de credencial; `changePassword` solo con credencial existente |
-| G4 magic link sin email | SC-001 no verificable por usuarios reales | Flujo listo en cliente; link desde log en dev; requiere decidir proveedor de email |
-| D5 topología de despliegue | En producción `/api` debe ser del mismo origen; hoy `vercel.json` reescribe `/(.*)` a `index.html` | Rutas relativas en el cliente; regla de rewrite/reverse proxy es tarea de despliegue |
-| Google OAuth de punta a punta sin probar (README `002`) | Escenario 2 puede revelar problemas de `redirect_uri` | Credencial de desarrollo con redirect `:5173`; validarlo temprano |
-| Completitud admin: ~350 requests | Lento en frío | Concurrencia limitada + progreso; endpoint agregado como mejora futura de backend |
-| Casing/ids inconsistentes del backend | Errores sutiles (`"12"` vs `12`) | Capa `api/` con tipos y mappers únicos; tests unitarios |
+| **`007-backend`** (prioridad según D14: alta controlada → cambio de rol → fijar contraseña → `DELETE` de pool con `400`) | US9 queda en lectura (G1); sin "fijar contraseña" (G3); alta de usuarios sin cierre (G5); borrado de pool asignado da `500` (G6) | Cada limitación tiene comportamiento definido en la spec y en el cliente; nada queda a medias |
+| D14 aún no implementada | Cualquiera puede crear identidad por la API | El cliente no la ofrece y queda preparado para el rechazo (mensaje genérico, `?error=`); no se declara al frontend como control |
+| G4 magic link sin email real | SC-001 no verificable por usuarios reales | Flujo completo en el cliente; el link sale del log del backend en dev |
+| D5 topología de despliegue | En producción `/api` debe ser del mismo origen; hoy `vercel.json` reescribe `/(.*)` a `index.html` | Rutas relativas; la regla de rewrite/reverse proxy es tarea de despliegue |
+| Google OAuth sin probar de punta a punta (README de `002`) | El escenario 2 puede revelar problemas de `redirect_uri` | Credencial de desarrollo con redirect `:5173`; validar temprano |
+| Mensajes de error de taxonomía sin campo estructurado | Asociar el error a una pregunta depende del texto | Resaltar por `codigo`/`texto` en el mensaje + mensaje completo junto al formulario; validar contra los triggers reales |
+| Completitud admin ≈ 250–350 requests | Lento en frío | Concurrencia 6, progreso visible, catálogo por tipo cacheado; endpoint agregado como mejora futura |
+| Usuario editor de otra provincia en el diálogo de pools | No ve ni crea pools de la provincia del organismo (403 del backend) | El diálogo lo explica y muestra las asignaciones existentes por id |
+| Nombres de componentes shadcn cambiantes | Diferencias entre la doc y el CLI | `shadcn add` falla explícitamente ante un nombre inexistente; se resuelve al instalar |
 
-## Preguntas abiertas (necesitan tu confirmación antes de `/speckit-tasks`)
+## Preguntas abiertas
 
-1. **G1 — cambio de rol (FR-019)**: ¿US9 entra en modo *solo lectura* con el control deshabilitado, hasta que exista `007`? (Recomendado.) ¿O se pospone US9 entera?
-2. **G2 — FR-002**: ¿aceptás el mensaje "explicativo ante cualquier fallo de contraseña" en lugar de detectar la revocación (que el backend no permite distinguir)? ¿O preferís pedirle al backend un código distinguible (con el costo de facilitar la enumeración de cuentas)?
-3. **G3 — fijar contraseña nueva**: ¿se difiere a `007` (junto con G1)?
-4. **Pools como sección propia del menú** (`/pools`), o solo dentro del diálogo de asignación de jueces.
-5. **Registro con contraseña**: confirmar que no hay pantalla de alta de cuenta (usuarios nuevos entran por Google o magic link).
-6. **Provincia en el alta para admin**: ¿editable (supuesto) o también fija?
-7. **Completitud de taxonomía** para tipos sin preguntas aplicables: ¿cuentan como "completos" (supuesto) o "no aplica"?
+Ninguna que bloquee `/speckit-tasks`. Las 7 decisiones pendientes están
+resueltas en la spec. Puntos a **validar durante la implementación** (no son
+decisiones): spike de cookies (escenario 0), redirect de Google, mensajes
+reales de los triggers de taxonomía y nombres exactos de los componentes
+shadcn.
 
 ## Complexity Tracking
 

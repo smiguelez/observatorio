@@ -2,6 +2,7 @@
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-09-23
+**Last validated**: 2026-09-24 (tras las 7 decisiones de la sesión de clarificación)
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -59,4 +60,39 @@
   "completitud", generación de PDF en cliente vs. servidor) tenían un
   default razonable y de bajo riesgo — documentados en Assumptions, no
   bloquean el alcance de ninguna historia.
-- Todos los ítems pasan en la primera iteración.
+- Todos los ítems pasan en la primera iteración (2026-09-23).
+
+## Revalidación 2026-09-24 (7 decisiones incorporadas)
+
+Se revisó el spec completo contra cada ítem tras aplicar las decisiones.
+Todos siguen pasando. Cambios verificados:
+
+- **Contexto/Assumptions**: el "hallazgo" de endpoints faltantes se marcó
+  como resuelto por `006` (ya mergeada); las brechas abiertas reales
+  (cambio de rol, fijar contraseña, alta de usuarios por admin) se
+  documentan como dependencia de `007`, fuera de alcance.
+- **Decisión 1 (US9 solo lectura)**: US9 reescrita; nuevo escenario de
+  control deshabilitado con explicación; FR-019 acotado.
+- **Decisión 2 (mensaje genérico)**: US1 escenario 4, FR-002 y SC-008
+  reescritos. Se deja registrado que resuelve el ítem 1 del backlog en
+  sentido opuesto al previsto (no avisar la revocación, por seguridad).
+- **Decisión 3 (fijar contraseña)**: US6 (nuevo escenario 4) y FR-014.
+- **Decisión 4 (pools)**: US4 escenario 5, US5 escenario 4, FR-013, FR-024
+  y SC-009.
+- **Decisión 5 (sin registro público)**: FR-022 y Assumptions.
+- **Decisión 6 (provincia)**: US2 escenarios 3-5 y FR-004.
+- **Decisión 7 (taxonomía sin preguntas)**: US3 escenario 4, US7, FR-017,
+  FR-023 y el criterio de completitud en Assumptions.
+- 0 marcadores [NEEDS CLARIFICATION].
+- Ítems que siguen sin marcarse como problema pero conviene tener presentes:
+  - **Tensión conocida (decisión 5 vs. backend)**: la decisión dice que
+    solo un admin crea usuarios, pero (a) esta feature no puede ofrecer esa
+    pantalla —no hay endpoint— y (b) el backend hoy crea identidades al
+    ingresar por Google/enlace y expone el alta con contraseña de su
+    librería de auth. Está en Assumptions como dependencia explícita de
+    `007`; no es un defecto del spec sino una consecuencia a decidir allí.
+  - Los artefactos de plan (`plan.md`, `research.md`, `data-model.md`,
+    `contracts/routes.md`, `quickstart.md`) se escribieron antes de estas
+    decisiones y quedaron desactualizados en varios puntos (sección
+    `/pools`, criterio de completitud, mensaje de login, pregunta 1-7
+    abiertas). Hay que regenerarlos con `/speckit-plan`.

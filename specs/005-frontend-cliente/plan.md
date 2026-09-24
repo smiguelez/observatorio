@@ -18,10 +18,11 @@ Decisiones técnicas que estructuran todo lo demás (detalle en
 1. **Cookies en desarrollo: proxy de Vite hacia `/api`, same-origin, sin CORS
    nuevo en el backend.** Reverificado el 2026-09-24 contra el árbol actual
    (con `006` mergeada): el backend sigue sin CORS ni `trustedOrigins`, y
-   Better Auth valida el `Origin` de los `POST` con cookie. El proxy debe
-   quedar sin `changeOrigin` y el backend en dev corre con
-   `BETTER_AUTH_URL=http://localhost:5173`. Se valida con un spike antes de
-   construir pantallas (quickstart, escenario 0).
+   Better Auth valida el `Origin` de los `POST` con cookie. **Validado en un
+   navegador real el 2026-09-24 (spike T010)**: con el proxy de Vite y el
+   backend corriendo con `BETTER_AUTH_URL=http://localhost:5173` el login y la
+   sesión funcionan; sin esa variable todo `POST` con cookie da `403
+   INVALID_ORIGIN` (es requisito en todos los entornos, no solo en dev).
 2. **shadcn con Vite ≠ receta de Next.js**: Tailwind v4 con
    `@tailwindcss/vite`, alias `@/*` en **dos** tsconfig, `components.json`
    con `rsc:false`, y `npx shadcn@latest init --template vite`.

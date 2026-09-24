@@ -1,0 +1,44 @@
+{
+  "loginContrasena": {
+    "urlFinal": "http://localhost:5173/organismos"
+  },
+  "mensajes": {
+    "errada": "Email o contraseña incorrectos.También podés ingresar con Google o con un enlace por email. Recibir un enlace por email",
+    "inexistente": "Email o contraseña incorrectos.También podés ingresar con Google o con un enlace por email. Recibir un enlace por email",
+    "revocada": "Email o contraseña incorrectos.También podés ingresar con Google o con un enlace por email. Recibir un enlace por email"
+  },
+  "respuestasDelBackend": {
+    "errada": [
+      {
+        "status": 401,
+        "cuerpo": "{\"message\":\"Invalid email or password\",\"code\":\"INVALID_EMAIL_OR_PASSWORD\"}"
+      }
+    ],
+    "inexistente": [
+      {
+        "status": 401,
+        "cuerpo": "{\"message\":\"Invalid email or password\",\"code\":\"INVALID_EMAIL_OR_PASSWORD\"}"
+      }
+    ],
+    "revocada": [
+      {
+        "status": 401,
+        "cuerpo": "{\"message\":\"Invalid email or password\",\"code\":\"INVALID_EMAIL_OR_PASSWORD\"}"
+      }
+    ]
+  },
+  "magicLink": {
+    "linkHost": "http://localhost:5173"
+  },
+  "magicLinkSesion": {
+    "usuarioId": "1182",
+    "rol": "usuario_normal",
+    "provinciaId": null
+  },
+  "google": {
+    "host": "accounts.google.com",
+    "redirect_uri": "http://localhost:5173/api/auth/callback/google",
+    "client_id": "dummy-dev"
+  },
+  "fixturesRestantes": 0
+}

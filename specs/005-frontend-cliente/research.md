@@ -134,13 +134,18 @@ server: { proxy: { '/api': { target: 'http://localhost:3000' } } } // sin change
   `createAuthClient()` de Better Auth (sin `baseURL`, o
   `window.location.origin`). `fetch` con credenciales por defecto
   (`same-origin`); no hace falta `include`.
-- **`changeOrigin` debe quedar en `false`** (default de Vite): el puente
-  Fastify→Better Auth arma la URL con `request.hostname` (`app.ts`); con
-  `false` el `Host` es `localhost:5173`, igual al `Origin` del navegador, y el
-  origin check pasa. Con `true` el `Host` sería `:3000`, el `Origin` seguiría
-  en `:5173` y volvería el `403 INVALID_ORIGIN`.
-- **Backend en dev con `BETTER_AUTH_URL=http://localhost:5173`** (Better Auth
-  desaconseja inferir el baseURL, doc oficial de opciones). Consecuencia: el
+- **`BETTER_AUTH_URL` es un requisito, no una recomendación** (corrección
+  2026-09-24, medida en el spike T010 —
+  `docs/resultado-verificacion-frontend-cookies-20260924.md`): sin la variable,
+  la lista de orígenes confiables queda vacía y **todo `POST` con cookie da
+  `403 INVALID_ORIGIN` en cualquier combinación de `Origin`/`Host`, incluso el
+  mismo origen**. Con la variable fijada, el origen confiable sale de ella y
+  **`changeOrigin` es irrelevante** (se deja sin activar por simplicidad). La
+  versión anterior de este documento atribuía el éxito a que `Host` y `Origin`
+  coincidieran; esa hipótesis quedó refutada por el experimento.
+- **Backend en dev con `BETTER_AUTH_URL=http://localhost:5173`** (obligatoria
+  también en producción, con la URL pública del sitio; hoy `backend/README.md`
+  no la lista entre las variables). Consecuencia: el
   `redirect_uri` de Google es `http://localhost:5173/api/auth/callback/google`
   y hay que registrarlo en la credencial de desarrollo. Los `callbackURL`
   que envía el cliente son **relativos** (`/`, `/organismos`).
@@ -157,9 +162,12 @@ backend (`@fastify/cors` con `credentials`, `trustedOrigins`), fuera del
 alcance, y haría que dev y prod difieran justo en auth; (b) bearer token — el
 backend usa cookies y dejaría tokens al alcance de JS.
 
-**A validar en quickstart (spike, escenario 0, antes de las pantallas)**:
-login por contraseña vía el proxy → `GET /api/auth/session` 200 con cookie
-en `localhost:5173`. La lectura del código lo predice; no se ejecutó.
+**Validado el 2026-09-24 (spike T010, navegador real)**: login por contraseña
+vía el proxy → `POST /api/auth/sign-in/email` 200 y `GET /api/auth/session`
+200, cookie `better-auth.session_token` (`httpOnly`, `SameSite=Lax`) en
+`localhost:5173`, sin errores de CORS ni `INVALID_ORIGIN`. Además
+`OPTIONS` directo al backend responde 404 sin `Access-Control-*` (no hay CORS).
+Evidencia: `docs/resultado-verificacion-frontend-cookies-20260924.md`.
 
 ---
 

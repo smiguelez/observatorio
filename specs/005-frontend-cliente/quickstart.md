@@ -32,7 +32,7 @@ cd frontend && npm install && npm run dev
 
 | # | Escenario | Pasos | Resultado esperado | Prueba |
 |---|---|---|---|---|
-| 0 | **Spike de cookies (primero)** | `http://localhost:5173/login`, login con contraseña; DevTools: cookie de sesión en el origen `:5173` y `GET /api/auth/session` → 200 | Sin errores de CORS ni `403 INVALID_ORIGIN`. Si aparece `INVALID_ORIGIN`: revisar que `changeOrigin` no esté activo y `BETTER_AUTH_URL` | research Dec. 3 |
+| 0 | **Spike de cookies (primero)** | `http://localhost:5173/login`, login con contraseña; DevTools: cookie de sesión en el origen `:5173` y `GET /api/auth/session` → 200 | Sin errores de CORS ni `403 INVALID_ORIGIN`. Si aparece `INVALID_ORIGIN`: falta `BETTER_AUTH_URL` en el backend (es obligatoria). **Ya validado 2026-09-24** (`docs/resultado-verificacion-frontend-cookies-20260924.md`) | research Dec. 3 |
 | 1 | Login por contraseña | Usuario de prueba | Entra a `/organismos` | US1-1, SC-001 |
 | 2 | Login por Google | "Continuar con Google" | Vuelve autenticado, mismo usuario que (1) si el email coincide | US1-2 |
 | 3 | Magic link | Pedir enlace; tomar el link **del log del backend** (G4) | Entra sin contraseña; el enlace reusado vuelve a `/login` con mensaje de enlace inválido | US1-3 |

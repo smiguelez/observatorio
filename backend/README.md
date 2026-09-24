@@ -32,6 +32,7 @@ cargadas por `src/config/env.ts`:
 |---|---|
 | `DATABASE_URL` | connection string de Postgres (mismo rol `observatorio_app` que usa `migration/`). |
 | `BETTER_AUTH_SECRET` | secreto de firma de sesión/cookies de Better Auth. |
+| `BETTER_AUTH_URL` | **obligatoria.** URL pública (origen) desde la que el navegador accede a la app, p. ej. `http://localhost:5173` en desarrollo con el frontend de `005` detrás del proxy de Vite, o el dominio real en producción. Better Auth la toma directamente del entorno (no pasa por `src/config/env.ts`) y la usa como único origen confiable: **sin ella, todo `POST` que lleve cookie de sesión responde `403 INVALID_ORIGIN`, incluso desde el mismo origen del backend**, sin importar el `Host`/`Origin` ni `changeOrigin` de un proxy (verificado el 2026-09-24 en `docs/resultado-verificacion-frontend-cookies-20260924.md`). No hay CORS configurado: el cliente debe ir same-origin. Los tests de `backend/` (`app.inject`) corren sin ella (verificado el 2026-09-24 con `tests/contract/auth.test.ts` y `organismos.test.ts`), por eso no figura en el comando de tests. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | credenciales OAuth de Google (Principio III). |
 | `PORT` | puerto HTTP (default `3000`). |
 
@@ -52,6 +53,7 @@ npm run migrate:public
 # 3. Levantar la API
 DATABASE_URL="postgresql://..." \
 BETTER_AUTH_SECRET="..." \
+BETTER_AUTH_URL="http://localhost:5173" \
 GOOGLE_CLIENT_ID="..." GOOGLE_CLIENT_SECRET="..." \
   npm run dev
 ```

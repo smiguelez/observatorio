@@ -1,0 +1,35 @@
+{
+  "origen": "http://localhost:5173/",
+  "red": [
+    {
+      "method": "POST",
+      "url": "http://localhost:5173/api/auth/sign-in/email",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:5173/api/auth/session",
+      "status": 200
+    }
+  ],
+  "consola": [],
+  "cookies": [
+    {
+      "name": "better-auth.session_token",
+      "domain": "localhost",
+      "path": "/",
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "salida": {
+    "signIn": "ok",
+    "sessionStatus": 200,
+    "session": {
+      "usuarioId": "1172",
+      "rol": "usuario_normal",
+      "provinciaId": null
+    }
+  }
+}

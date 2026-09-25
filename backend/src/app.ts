@@ -17,9 +17,11 @@ import { registrarRutasAuth } from './routes/auth.js'
 import { registrarRutasOrganismos } from './routes/organismos.js'
 import { registrarRutasPoolsJueces } from './routes/pools-jueces.js'
 import { registrarRutasUsuarios } from './routes/usuarios.js'
+import { registrarRutasAccesoInicial } from './routes/acceso-inicial.js'
 import { registrarRutasLocalidades } from './routes/localidades.js'
 import { registrarRutasCatalogos } from './routes/catalogos.js'
 import { registrarRutasTaxonomia } from './routes/taxonomia.js'
+import { registrarManejadorDeErrores } from './http/errores-integridad.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -27,11 +29,15 @@ declare module 'fastify' {
   }
 }
 
-export async function buildApp() {
-  const app = Fastify({ logger: true }).withTypeProvider<TypeBoxTypeProvider>()
+export async function buildApp(opciones: { logStream?: NodeJS.WritableStream } = {}) {
+  // `logStream` solo lo usan los tests para inspeccionar lo que se loguea (FR-022).
+  const app = Fastify({ logger: opciones.logStream ? { stream: opciones.logStream } : true }).withTypeProvider<TypeBoxTypeProvider>()
   const pool = getPgPool()
 
   app.register(fastifyCookie)
+
+  // 007: manejador central de errores (ErrorNegocio; US6 lo extiende con clase 23 de Postgres).
+  registrarManejadorDeErrores(app)
 
   // T018: nuestra propia ruta (IdentidadResuelta), registrada ANTES del
   // wildcard de Better Auth — Fastify prioriza rutas estáticas sobre
@@ -47,6 +53,9 @@ export async function buildApp() {
 
   // T032 (US4): perfiles de usuario — lectura amplia, edición acotada.
   await app.register(registrarRutasUsuarios)
+
+  // 007 (US4): canje del acceso inicial (única ruta de dominio pública; ver el hook de 401 más abajo).
+  await app.register(registrarRutasAccesoInicial)
 
   // T036 (US5): catálogo de localidades, solo lectura.
   await app.register(registrarRutasLocalidades)
@@ -96,6 +105,8 @@ export async function buildApp() {
   // identidad en cada request (FR-002) — nunca se cachea entre requests.
   app.addHook('onRequest', async (request, reply) => {
     if (request.url.startsWith('/api/auth')) return
+    // 007 (FR-029): excepción explícita y única — el canje del acceso inicial no puede tener sesión previa.
+    if (request.method === 'POST' && request.url.split('?')[0] === '/api/acceso-inicial/canjear') return
 
     const identidad = await resolverIdentidad(pool, auth, aHeadersWeb(request.headers))
     if (!identidad) {

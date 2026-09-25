@@ -306,6 +306,14 @@ propia — no se resuelve de pasada dentro de ninguna otra.
 
 **D14 — Alta de usuarios sin control administrativo: gap de seguridad activo, resuelto por diseño (2026-09-24).**
 
+> **✅ RESUELTO por `007-identidad-autorizacion` (2026-09-25).** Se implementó la opción 1 y se cerró además un
+> camino que D14 no cubría (FR-004 de `007`): el alta pública por contraseña sobre un email **ya provisionado** cuyo
+> dueño nunca ingresó entregaba una sesión de esa cuenta (verificado el 2026-09-25). Mecanismo: el
+> `databaseHooks.user.create.before` (`backend/src/auth/identidad-hook.ts`) rechaza con `403 ACCESO_NO_AUTORIZADO`
+> (uniforme, sin revelar si el email existe) todo email que no esté en `usuarios` por los tres métodos, y
+> `emailAndPassword.disableSignUp: true` elimina el alta pública por contraseña. Las altas las hace un admin
+> (`POST /api/usuarios`) y entrega un acceso inicial de un solo uso. Evidencia: `docs/resultado-verificacion-007-20260925.md`.
+
 Hoy cualquiera puede crear una cuenta por contraseña (ruta de Better Auth
 expuesta), Google, o magic link con cualquier email — no hay ningún
 control de "solo un admin crea usuarios" a nivel de backend, pese a que
@@ -377,6 +385,13 @@ ejemplo N") en lugar de copiar filas reales de la base.
 
 **D16 — Errores de integridad sin capturar responden `500` en vez de `400` (hallazgo de `005` para `007`, 2026-09-24).**
 
+> **✅ RESUELTO por `007` (2026-09-25).** Un manejador central (`backend/src/http/errores-integridad.ts`) traduce a
+> `400` con mensaje claro los errores de Postgres causados por datos del cliente (clase 23, clase 22 y `P0001` de los
+> triggers) con un mapa por constraint; `DELETE` ⇒ "en uso", el resto ⇒ "no existe" (el método HTTP desambigua `23503`).
+> Lo inesperado sigue siendo `500` sin exponer el detalle. Se quitaron los `try/catch` locales y `trigger-error.ts`.
+> Los dos `500` de `005` (borrar un pool en uso; UF con localidad inexistente) responden `400`. Revisión adicional
+> (FR-025): un valor fuera de rango (`smallint`) y un id mal formado también eran `500`; ahora `400`.
+
 `006` ya tradujo a un `400` con mensaje los rechazos de `UNIQUE`/`CHECK`/`FK` de **asignaciones de jueces** y de
 **editores** (`esRechazoDeIntegridad` / `mensajeDeIntegridad` en `backend/src/http/trigger-error.ts`), pero solo en
 esas rutas. Al implementar el frontend se midió contra el backend real que **otras rutas con la misma clase de
@@ -428,6 +443,12 @@ regla.
 
 **D18 — Los errores de los triggers de taxonomía nombran la pregunta por id interno: FR-009 de `005` solo se cumple en parte (2026-09-24).**
 
+> **✅ RESUELTO por `007` (2026-09-25).** Migración `0004_taxonomia_mensajes_legibles` (solo reemplaza funciones,
+> reversible): los rechazos nombran la pregunta por su código (y texto si difiere) sin ids ni nombres de tabla, con
+> `DETAIL = 'preguntaCodigo=<codigo>'`. El `PUT /api/organismos/:orgId/taxonomia` responde
+> `400 { error, preguntaCodigo, preguntaTexto }` y valida antes que la opción pertenezca a la pregunta. Sigue abierto
+> D19 (cargar los enunciados reales): mientras tanto el texto coincide con el código.
+
 `FR-009` (`005`) pide identificar qué pregunta de taxonomía tuvo el problema cuando el backend rechaza un
 guardado. Los mensajes de los triggers (`backend/migrations/0001`–`0003`, `RAISE EXCEPTION`) y el `400` del `PUT
 /api/organismos/:orgId/taxonomia` mezclan datos internos y **no incluyen el `codigo` de la pregunta**. Ejemplo
@@ -473,6 +494,12 @@ no tienen ninguna pregunta real todavía y solo se probaron con un catálogo sin
 ---
 
 **D20 — Un usuario puede autoasignarse cualquier provincia y con eso ganar acceso a los pools de esa provincia (hallazgo de `005` para `007`, 2026-09-24). PRIORIDAD ALTA: es un problema de autorización, no de UX.**
+
+> **✅ RESUELTO por `007` (2026-09-25).** `provinciaId` la escribe solo un admin: un no admin que intenta **cambiarla**
+> recibe `403` explícito y no se aplica nada de la solicitud; reenviar la provincia actual no es un cambio (FR-010,
+> mantiene compatible el perfil de `005` hasta la Fase B). El cambio rige en la siguiente solicitud del afectado. G1
+> (cambio de rol, `PUT /api/usuarios/:id/rol`, último admin protegido) y G3 (primer acceso y cambio de contraseña con
+> cierre de las demás sesiones) también quedaron cerrados en `007`.
 
 **Qué pasa hoy** (verificado en el código de `002`, `reformulacion`):
 - `PATCH /api/usuarios/:id` (`backend/src/routes/usuarios.ts`) acepta `provinciaId` y lo autoriza con

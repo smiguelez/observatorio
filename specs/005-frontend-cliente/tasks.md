@@ -100,19 +100,19 @@ description: "Task list — Frontend del Observatorio (005-frontend-cliente)"
 
 ### Tests for User Story 2
 
-- [ ] T031 [P] [US2] Test de esquemas en `frontend/tests/unit/api/organismos.test.ts` con respuestas wire reales: `propietario_id: "12"` → `propietarioId: 12`; snake → camel; campo faltante → `ContratoInesperado`
-- [ ] T032 [P] [US2] Test de `relacionOrganismo` (propietario / editor / admin) en `frontend/tests/unit/features/relacion-organismo.test.ts`
+- [X] T031 [P] [US2] Test de esquemas en `frontend/tests/unit/api/organismos.test.ts` con respuestas wire reales: `propietario_id: "12"` → `propietarioId: 12`; snake → camel; campo faltante → `ContratoInesperado`
+- [X] T032 [P] [US2] Test de `relacionOrganismo` (propietario / editor / admin) en `frontend/tests/unit/features/relacion-organismo.test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T033 [P] [US2] Implementar `frontend/src/api/organismos.ts`: esquemas y funciones de `GET /api/organismos`, `GET/PATCH /api/organismos/:id`, `POST /api/organismos` (incluye `confirmarPerdidaTaxonomia` y el `400` con `preguntasQueSePerderian`) y sus hooks TanStack con invalidación tras mutar
-- [ ] T034 [P] [US2] Implementar `frontend/src/api/fuero.ts`: `GET /api/organismos/:orgId/fuero` → `{fueros, fueroSimplificado}` (vacío no es error)
-- [ ] T035 [P] [US2] Implementar `relacionOrganismo(organismo, sesion)` en `frontend/src/features/organismos/relacion.ts`
-- [ ] T036 [US2] Implementar `frontend/src/routes/organismos/OrganismosListPage.tsx`: tabla con denominación y relación (propio / editor / admin); estado vacío explícito
-- [ ] T037 [US2] Implementar `frontend/src/routes/organismos/OrganismoNuevoPage.tsx`: `usuario_normal` → provincia fija con `sesion.provinciaId` (si es `null`, bloquear el envío y remitir al perfil, US2-5); admin → `select` editable; sin ningún campo de propietario; muestra el fuero como "sin fuero asignado", solo lectura
-- [ ] T038 [US2] Implementar `frontend/src/routes/organismos/OrganismoDetallePage.tsx`: carga `GET /:id`, pestañas Datos · Unidades funcionales · Taxonomía · Editores (contenido de cada una lo entrega su historia), `403` → `NoAutorizado`, `404` → `NoEncontrado`
-- [ ] T039 [US2] Implementar la pestaña Datos en `frontend/src/routes/organismos/DatosTab.tsx`: edición de denominación, denominación simplificada, tipo y **provincia solo para admin**; fuero solo lectura; diálogo de Protección B (`alert-dialog` listando `preguntasQueSePerderian`, reenvía con `confirmarPerdidaTaxonomia: true` solo tras confirmar)
-- [ ] T040 [US2] Test E2E en `frontend/tests/e2e/organismos.spec.ts`: escenarios 7, 8, 9, 10 y 14
+- [X] T033 [P] [US2] Implementar `frontend/src/api/organismos.ts`: esquemas y funciones de `GET /api/organismos`, `GET/PATCH /api/organismos/:id`, `POST /api/organismos` (incluye `confirmarPerdidaTaxonomia` y el `400` con `preguntasQueSePerderian`) y sus hooks TanStack con invalidación tras mutar
+- [X] T034 [P] [US2] Implementar `frontend/src/api/fuero.ts`: `GET /api/organismos/:orgId/fuero` → `{fueros, fueroSimplificado}` (vacío no es error)
+- [X] T035 [P] [US2] Implementar `relacionOrganismo(organismo, sesion)` en `frontend/src/features/organismos/relacion.ts`
+- [X] T036 [US2] Implementar `frontend/src/routes/organismos/OrganismosListPage.tsx`: tabla con denominación y relación (propio / editor / admin); estado vacío explícito
+- [X] T037 [US2] Implementar `frontend/src/routes/organismos/OrganismoNuevoPage.tsx`: `usuario_normal` → provincia fija con `sesion.provinciaId` (si es `null`, bloquear el envío y remitir al perfil, US2-5); admin → `select` editable; sin ningún campo de propietario; muestra el fuero como "sin fuero asignado", solo lectura
+- [X] T038 [US2] Implementar `frontend/src/routes/organismos/OrganismoDetallePage.tsx`: carga `GET /:id`, pestañas Datos · Unidades funcionales · Taxonomía · Editores (contenido de cada una lo entrega su historia), `403` → `NoAutorizado`, `404` → `NoEncontrado`
+- [X] T039 [US2] Implementar la pestaña Datos en `frontend/src/routes/organismos/DatosTab.tsx`: edición de denominación, denominación simplificada, tipo y **provincia solo para admin**; fuero solo lectura; diálogo de Protección B (`alert-dialog` listando `preguntasQueSePerderian`, reenvía con `confirmarPerdidaTaxonomia: true` solo tras confirmar)
+- [X] T040 [US2] Test E2E en `frontend/tests/e2e/organismos.spec.ts`: escenarios 7, 8, 9, 10 y 14
 
 **Checkpoint**: US1 + US2 funcionan; ya hay un flujo completo de entrada y carga.
 
@@ -126,18 +126,18 @@ description: "Task list — Frontend del Observatorio (005-frontend-cliente)"
 
 ### Tests for User Story 3
 
-- [ ] T041 [P] [US3] Test de `construirEsquema(catalogo)` en `frontend/tests/unit/features/taxonomia/esquema.test.ts`: única ≤ 1 opción del catálogo; múltiple 0..n (0 no es error); numérica finita; texto vacío = no responder
-- [ ] T042 [P] [US3] Test de `mezclar` y `armarPut` en `frontend/tests/unit/features/taxonomia/mezclar.test.ts`: catálogo ⊕ respuestas precargadas por `codigo`; el `PUT` incluye **todas** las respuestas no vacías (omitir borra) y omite las múltiples sin selección
+- [X] T041 [P] [US3] Test de `construirEsquema(catalogo)` en `frontend/tests/unit/features/taxonomia/esquema.test.ts`: única ≤ 1 opción del catálogo; múltiple 0..n (0 no es error); numérica finita; texto vacío = no responder
+- [X] T042 [P] [US3] Test de `mezclar` y `armarPut` en `frontend/tests/unit/features/taxonomia/mezclar.test.ts`: catálogo ⊕ respuestas precargadas por `codigo`; el `PUT` incluye **todas** las respuestas no vacías (omitir borra) y omite las múltiples sin selección
 
 ### Implementation for User Story 3
 
-- [ ] T043 [P] [US3] Implementar `frontend/src/api/taxonomia.ts`: catálogo `GET /api/taxonomia/preguntas[?tipoOficinaId=]` (`opciones` = todas las posibles), respuestas `GET /api/organismos/:orgId/taxonomia` (`opciones` = solo las seleccionadas) y `PUT` con `{respuestas:[{preguntaCodigo, opcionesCodigos?, valorNumero?, valorTexto?}]}`; `400` → `ApiError` con el mensaje
-- [ ] T044 [P] [US3] Implementar `frontend/src/features/taxonomia/esquema.ts` (`construirEsquema`, zod en runtime desde el catálogo)
-- [ ] T045 [P] [US3] Implementar `frontend/src/features/taxonomia/mezclar.ts` (`mezclar`, `armarPut`, tipo `RespuestaForm` de data-model.md)
-- [ ] T046 [P] [US3] Implementar los controles por tipo en `frontend/src/features/taxonomia/controles/` (`OpcionUnica.tsx` con `radio-group`, `OpcionMultiple.tsx` con `checkbox`, `Numerica.tsx`, `TextoLibre.tsx`) mostrando siempre `texto`, nunca `codigo`
-- [ ] T047 [US3] Implementar `frontend/src/features/taxonomia/TaxonomiaForm.tsx` y la pestaña/ruta `frontend/src/routes/organismos/TaxonomiaTab.tsx`: pide catálogo por `tipoOficinaId` del organismo y respuestas; catálogo `[]` → estado "este tipo de organismo no tiene taxonomía" **sin** pedir `…/taxonomia` (FR-023); guardar envía el conjunto completo
-- [ ] T048 [US3] Asociar el `400` del `PUT` a una pregunta en `frontend/src/features/taxonomia/errores.ts`: resaltar la pregunta cuyo `codigo` o `texto` aparece en el mensaje y mostrar siempre el mensaje completo junto al formulario (FR-009); validar contra los mensajes reales de `backend/migrations/0001..0003` y ajustar la heurística
-- [ ] T049 [US3] Test E2E en `frontend/tests/e2e/taxonomia.spec.ts`: escenarios 11 (incluye que guardar y recargar conserva todas las respuestas), 12 y 13
+- [X] T043 [P] [US3] Implementar `frontend/src/api/taxonomia.ts`: catálogo `GET /api/taxonomia/preguntas[?tipoOficinaId=]` (`opciones` = todas las posibles), respuestas `GET /api/organismos/:orgId/taxonomia` (`opciones` = solo las seleccionadas) y `PUT` con `{respuestas:[{preguntaCodigo, opcionesCodigos?, valorNumero?, valorTexto?}]}`; `400` → `ApiError` con el mensaje
+- [X] T044 [P] [US3] Implementar `frontend/src/features/taxonomia/esquema.ts` (`construirEsquema`, zod en runtime desde el catálogo)
+- [X] T045 [P] [US3] Implementar `frontend/src/features/taxonomia/mezclar.ts` (`mezclar`, `armarPut`, tipo `RespuestaForm` de data-model.md)
+- [X] T046 [P] [US3] Implementar los controles por tipo en `frontend/src/features/taxonomia/controles/` (`OpcionUnica.tsx` con `radio-group`, `OpcionMultiple.tsx` con `checkbox`, `Numerica.tsx`, `TextoLibre.tsx`) mostrando siempre `texto`, nunca `codigo`
+- [X] T047 [US3] Implementar `frontend/src/features/taxonomia/TaxonomiaForm.tsx` y la pestaña/ruta `frontend/src/routes/organismos/TaxonomiaTab.tsx`: pide catálogo por `tipoOficinaId` del organismo y respuestas; catálogo `[]` → estado "este tipo de organismo no tiene taxonomía" **sin** pedir `…/taxonomia` (FR-023); guardar envía el conjunto completo
+- [X] T048 [US3] Asociar el `400` del `PUT` a una pregunta en `frontend/src/features/taxonomia/errores.ts`: resaltar la pregunta cuyo `codigo` o `texto` aparece en el mensaje y mostrar siempre el mensaje completo junto al formulario (FR-009); validar contra los mensajes reales de `backend/migrations/0001..0003` y ajustar la heurística
+- [X] T049 [US3] Test E2E en `frontend/tests/e2e/taxonomia.spec.ts`: escenarios 11 (incluye que guardar y recargar conserva todas las respuestas), 12 y 13
 
 **Checkpoint**: las tres historias P1 completas — MVP funcional.
 
@@ -151,20 +151,20 @@ description: "Task list — Frontend del Observatorio (005-frontend-cliente)"
 
 ### Tests for User Story 4
 
-- [ ] T050 [P] [US4] Test de esquemas en `frontend/tests/unit/api/unidades-asignaciones-pools.test.ts` (snake vs camel de cada recurso; `total_jueces` → `totalJueces`)
-- [ ] T051 [P] [US4] Test de los atajos de carga en `frontend/tests/unit/features/asignaciones/atajos.test.ts`: pool completo = `cantidadAsignada == totalJueces`, subconjunto = menor; `cantidad > totalJueces` advierte pero no bloquea; no se persiste ningún "modo"
+- [X] T050 [P] [US4] Test de esquemas en `frontend/tests/unit/api/unidades-asignaciones-pools.test.ts` (snake vs camel de cada recurso; `total_jueces` → `totalJueces`)
+- [X] T051 [P] [US4] Test de los atajos de carga en `frontend/tests/unit/features/asignaciones/atajos.test.ts`: pool completo = `cantidadAsignada == totalJueces`, subconjunto = menor; `cantidad > totalJueces` advierte pero no bloquea; no se persiste ningún "modo"
 
 ### Implementation for User Story 4
 
-- [ ] T052 [P] [US4] Implementar `frontend/src/api/unidades.ts`: `GET/POST` de `/api/organismos/:orgId/unidades-funcionales` y `GET/PATCH/DELETE` de `/:ufId` (`denominacion_unidad` → `denominacionUnidad`, etc.)
-- [ ] T053 [P] [US4] Implementar `frontend/src/api/asignaciones.ts`: `GET/POST/PATCH/DELETE` de `…/asignaciones-jueces` (cambiar de pool = borrar + crear) y mapeo de los `400` documentados a mensajes
-- [ ] T054 [P] [US4] Implementar `frontend/src/api/pools.ts`: `GET /api/pools-jueces` (snake → camel), `POST`, `PATCH`, `DELETE`; un `500` en `DELETE` se convierte en un error tipado `PoolEnUsoOError` (brecha G6)
-- [ ] T055 [US4] Implementar la pestaña `frontend/src/routes/organismos/UnidadesTab.tsx`: lista de UF, alta, edición y borrado con confirmación
-- [ ] T056 [US4] Implementar `frontend/src/routes/organismos/UnidadFormPage.tsx`: `localidadId` filtrada por la provincia del organismo, `tipoUfId`, `anioImplementacion` opcional, `mail` con formato; en edición no se ofrece vaciar un opcional ya cargado (el `PATCH` usa `COALESCE`)
-- [ ] T057 [US4] Implementar `frontend/src/features/asignaciones/atajos.ts` (grupo exclusivo, pool completo, subconjunto como ayuda de carga)
-- [ ] T058 [US4] Implementar `frontend/src/features/asignaciones/AsignacionesDialog.tsx`: lista de asignaciones de la UF con pool, cantidad, edición de cantidad y borrado; alta con selector de pool; muestra un `grupoJuecesId` que no está en la lista como "pool #N, fuera de tu provincia"
-- [ ] T059 [US4] Implementar `frontend/src/features/asignaciones/PoolsPanel.tsx` dentro del diálogo: crear pool (provincia del organismo si es admin, la propia si no), editar `descripcion`/`totalJueces`, eliminar con confirmación y mensaje "no se pudo eliminar, el pool puede estar asignado a otras unidades funcionales" ante `PoolEnUsoOError`; si el usuario no puede gestionar pools de esa provincia, lo explica en lugar de fallar
-- [ ] T060 [US4] Test E2E en `frontend/tests/e2e/unidades-asignaciones.spec.ts`: escenarios 15 y 16 con el backend real, y 17 con un mock de red del `500` (el borrado real de un pool en uso queda documentado, no forzado)
+- [X] T052 [P] [US4] Implementar `frontend/src/api/unidades.ts`: `GET/POST` de `/api/organismos/:orgId/unidades-funcionales` y `GET/PATCH/DELETE` de `/:ufId` (`denominacion_unidad` → `denominacionUnidad`, etc.)
+- [X] T053 [P] [US4] Implementar `frontend/src/api/asignaciones.ts`: `GET/POST/PATCH/DELETE` de `…/asignaciones-jueces` (cambiar de pool = borrar + crear) y mapeo de los `400` documentados a mensajes
+- [X] T054 [P] [US4] Implementar `frontend/src/api/pools.ts`: `GET /api/pools-jueces` (snake → camel), `POST`, `PATCH`, `DELETE`; un `500` en `DELETE` se convierte en un error tipado `PoolEnUsoOError` (brecha G6)
+- [X] T055 [US4] Implementar la pestaña `frontend/src/routes/organismos/UnidadesTab.tsx`: lista de UF, alta, edición y borrado con confirmación
+- [X] T056 [US4] Implementar `frontend/src/routes/organismos/UnidadFormPage.tsx`: `localidadId` filtrada por la provincia del organismo, `tipoUfId`, `anioImplementacion` opcional, `mail` con formato; en edición no se ofrece vaciar un opcional ya cargado (el `PATCH` usa `COALESCE`)
+- [X] T057 [US4] Implementar `frontend/src/features/asignaciones/atajos.ts` (grupo exclusivo, pool completo, subconjunto como ayuda de carga)
+- [X] T058 [US4] Implementar `frontend/src/features/asignaciones/AsignacionesDialog.tsx`: lista de asignaciones de la UF con pool, cantidad, edición de cantidad y borrado; alta con selector de pool; muestra un `grupoJuecesId` que no está en la lista como "pool #N, fuera de tu provincia"
+- [X] T059 [US4] Implementar `frontend/src/features/asignaciones/PoolsPanel.tsx` dentro del diálogo: crear pool (provincia del organismo si es admin, la propia si no), editar `descripcion`/`totalJueces`, eliminar con confirmación y mensaje "no se pudo eliminar, el pool puede estar asignado a otras unidades funcionales" ante `PoolEnUsoOError`; si el usuario no puede gestionar pools de esa provincia, lo explica en lugar de fallar
+- [X] T060 [US4] Test E2E en `frontend/tests/e2e/unidades-asignaciones.spec.ts`: escenarios 15 y 16 con el backend real, y 17 con un mock de red del `500` (el borrado real de un pool en uso queda documentado, no forzado)
 
 **Checkpoint**: US4 completa; los pools solo existen dentro del diálogo.
 
@@ -178,16 +178,16 @@ description: "Task list — Frontend del Observatorio (005-frontend-cliente)"
 
 ### Tests for User Story 5
 
-- [ ] T061 [P] [US5] Test en `frontend/tests/unit/components/menu.test.tsx`: la definición del menú no contiene ítem de pools ni de registro para ningún rol; la sección Administración solo existe para `admin`; "Tableros" no se renderiza si falta `VITE_DATASTUDIO_URL`
+- [X] T061 [P] [US5] Test en `frontend/tests/unit/components/menu.test.tsx`: la definición del menú no contiene ítem de pools ni de registro para ningún rol; la sección Administración solo existe para `admin`; "Tableros" no se renderiza si falta `VITE_DATASTUDIO_URL`
 
 ### Implementation for User Story 5
 
-- [ ] T062 [US5] Implementar la jerarquía de `frontend/src/components/layout/AppSidebar.tsx` según research.md Dec. 7: Mis organismos · Tableros ↗ · Administración (solo admin: Gestión de organismos, Usuarios)
-- [ ] T063 [P] [US5] Implementar el menú de usuario en `frontend/src/components/layout/UserMenu.tsx` (`dropdown-menu` + `avatar`): Perfil, Ajustes, Cerrar sesión (`authClient.signOut()` + invalidar sesión)
-- [ ] T064 [P] [US5] Implementar el ítem Tableros en `frontend/src/components/layout/TablerosLink.tsx`: abre `VITE_DATASTUDIO_URL` con `target="_blank" rel="noopener noreferrer"`; sin la variable, no se muestra (FR-015)
-- [ ] T065 [P] [US5] Implementar `frontend/src/routes/ajustes/AjustesPage.tsx` como punto de entrada mínimo (Assumptions de la spec)
-- [ ] T066 [US5] Integrar sidebar, `breadcrumb` y `sheet` móvil en `frontend/src/components/layout/AppLayout.tsx`
-- [ ] T067 [US5] Test E2E en `frontend/tests/e2e/navegacion.spec.ts`: escenarios 18 y 24
+- [X] T062 [US5] Implementar la jerarquía de `frontend/src/components/layout/AppSidebar.tsx` según research.md Dec. 7: Mis organismos · Tableros ↗ · Administración (solo admin: Gestión de organismos, Usuarios)
+- [X] T063 [P] [US5] Implementar el menú de usuario en `frontend/src/components/layout/UserMenu.tsx` (`dropdown-menu` + `avatar`): Perfil, Ajustes, Cerrar sesión (`authClient.signOut()` + invalidar sesión)
+- [X] T064 [P] [US5] Implementar el ítem Tableros en `frontend/src/components/layout/TablerosLink.tsx`: abre `VITE_DATASTUDIO_URL` con `target="_blank" rel="noopener noreferrer"`; sin la variable, no se muestra (FR-015)
+- [X] T065 [P] [US5] Implementar `frontend/src/routes/ajustes/AjustesPage.tsx` como punto de entrada mínimo (Assumptions de la spec)
+- [X] T066 [US5] Integrar sidebar, `breadcrumb` y `sheet` móvil en `frontend/src/components/layout/AppLayout.tsx`
+- [X] T067 [US5] Test E2E en `frontend/tests/e2e/navegacion.spec.ts`: escenarios 18 y 24
 
 **Checkpoint**: la navegación completa reemplaza al layout provisorio.
 
@@ -201,15 +201,15 @@ description: "Task list — Frontend del Observatorio (005-frontend-cliente)"
 
 ### Tests for User Story 6
 
-- [ ] T068 [P] [US6] Test de esquemas en `frontend/tests/unit/api/usuarios.test.ts`: `id` string → number, `roles: null` → `[]`, snake → camel
+- [X] T068 [P] [US6] Test de esquemas en `frontend/tests/unit/api/usuarios.test.ts`: `id` string → number, `roles: null` → `[]`, snake → camel
 
 ### Implementation for User Story 6
 
-- [ ] T069 [P] [US6] Implementar `frontend/src/api/usuarios.ts`: `GET /api/usuarios`, `GET /api/usuarios/:id`, `PATCH /api/usuarios/:id` (`{nombreDisplay?, provinciaId?, fotoUrl?}`; no acepta rol)
-- [ ] T070 [US6] Implementar `frontend/src/routes/perfil/PerfilPage.tsx` con el formulario de datos propios (nombre, provincia del catálogo, foto opcional)
-- [ ] T071 [P] [US6] Implementar `frontend/src/routes/perfil/MetodosAcceso.tsx` con `authClient.listAccounts()` (`credential`, `google`, …)
-- [ ] T072 [US6] Implementar `frontend/src/routes/perfil/CambiarPassword.tsx`: solo si `listAccounts()` incluye `credential` (contraseña actual + nueva + confirmación, `authClient.changePassword`); si no, aviso de que ese método no está activo y que fijarlo está diferido a `007`; **sin** flujo de "fijar contraseña"
-- [ ] T073 [US6] Test E2E en `frontend/tests/e2e/perfil.spec.ts`: escenario 23
+- [X] T069 [P] [US6] Implementar `frontend/src/api/usuarios.ts`: `GET /api/usuarios`, `GET /api/usuarios/:id`, `PATCH /api/usuarios/:id` (`{nombreDisplay?, provinciaId?, fotoUrl?}`; no acepta rol)
+- [X] T070 [US6] Implementar `frontend/src/routes/perfil/PerfilPage.tsx` con el formulario de datos propios (nombre, provincia del catálogo, foto opcional)
+- [X] T071 [P] [US6] Implementar `frontend/src/routes/perfil/MetodosAcceso.tsx` con `authClient.listAccounts()` (`credential`, `google`, …)
+- [X] T072 [US6] Implementar `frontend/src/routes/perfil/CambiarPassword.tsx`: solo si `listAccounts()` incluye `credential` (contraseña actual + nueva + confirmación, `authClient.changePassword`); si no, aviso de que ese método no está activo y que fijarlo está diferido a `007`; **sin** flujo de "fijar contraseña"
+- [X] T073 [US6] Test E2E en `frontend/tests/e2e/perfil.spec.ts`: escenario 23
 
 **Checkpoint**: perfil funcional.
 
@@ -223,16 +223,16 @@ description: "Task list — Frontend del Observatorio (005-frontend-cliente)"
 
 ### Tests for User Story 7
 
-- [ ] T074 [P] [US7] Test de `calcularCompletitud` en `frontend/tests/unit/features/completitud/calcular.test.ts`: datos básicos, ≥ 1 UF, y taxonomía completa si catálogo del tipo `[]` **o** ≥ 1 respuesta; catálogo vacío no pide respuestas
-- [ ] T075 [P] [US7] Test de la cola en `frontend/tests/unit/features/completitud/cola.test.ts`: concurrencia máxima 6, orden estable de resultados, un error de un organismo no aborta el resto
+- [X] T074 [P] [US7] Test de `calcularCompletitud` en `frontend/tests/unit/features/completitud/calcular.test.ts`: datos básicos, ≥ 1 UF, y taxonomía completa si catálogo del tipo `[]` **o** ≥ 1 respuesta; catálogo vacío no pide respuestas
+- [X] T075 [P] [US7] Test de la cola en `frontend/tests/unit/features/completitud/cola.test.ts`: concurrencia máxima 6, orden estable de resultados, un error de un organismo no aborta el resto
 
 ### Implementation for User Story 7
 
-- [ ] T076 [P] [US7] Implementar `frontend/src/features/completitud/calcular.ts` (criterios de data-model.md) con caché del catálogo por `tipoOficinaId`
-- [ ] T077 [P] [US7] Implementar `frontend/src/features/completitud/cola.ts` (fan-out con concurrencia 6 y reporte de progreso)
-- [ ] T078 [US7] Implementar `frontend/src/routes/admin/AdminOrganismosPage.tsx`: tabla por organismo con las tres partes (completo/incompleto), barra de progreso durante el fan-out y filtro por estado
-- [ ] T079 [US7] Implementar `frontend/src/features/completitud/exportarPdf.ts` con `jspdf` + `jspdf-autotable`: mismo contenido que la tabla en pantalla; botón "Exportar PDF" en `AdminOrganismosPage.tsx`
-- [ ] T080 [US7] Test E2E en `frontend/tests/e2e/admin-organismos.spec.ts`: escenario 20, incluido el organismo de tipo sin taxonomía
+- [X] T076 [P] [US7] Implementar `frontend/src/features/completitud/calcular.ts` (criterios de data-model.md) con caché del catálogo por `tipoOficinaId`
+- [X] T077 [P] [US7] Implementar `frontend/src/features/completitud/cola.ts` (fan-out con concurrencia 6 y reporte de progreso)
+- [X] T078 [US7] Implementar `frontend/src/routes/admin/AdminOrganismosPage.tsx`: tabla por organismo con las tres partes (completo/incompleto), barra de progreso durante el fan-out y filtro por estado
+- [X] T079 [US7] Implementar `frontend/src/features/completitud/exportarPdf.ts` con `jspdf` + `jspdf-autotable`: mismo contenido que la tabla en pantalla; botón "Exportar PDF" en `AdminOrganismosPage.tsx`
+- [X] T080 [US7] Test E2E en `frontend/tests/e2e/admin-organismos.spec.ts`: escenario 20, incluido el organismo de tipo sin taxonomía
 
 **Checkpoint**: US7 completa.
 
@@ -246,9 +246,9 @@ description: "Task list — Frontend del Observatorio (005-frontend-cliente)"
 
 ### Implementation for User Story 8
 
-- [ ] T081 [P] [US8] Implementar `frontend/src/api/editores.ts`: `GET/POST/DELETE` de `/api/organismos/:orgId/editores` (`usuarioId` wire string → number; `POST` con `{usuarioId: number}`; mensajes de los `400` documentados) y test de esquema en `frontend/tests/unit/api/editores.test.ts`
-- [ ] T082 [US8] Implementar `frontend/src/routes/organismos/EditoresTab.tsx`: lista de editores visible para quien tiene acceso; agregar/quitar solo para propietario o admin (controles ocultos a un editor, con `403` del backend como respaldo mostrado con claridad); candidatos desde `GET /api/usuarios` excluyendo propietario y editores actuales
-- [ ] T083 [US8] Test E2E en `frontend/tests/e2e/editores.spec.ts`: escenario 19
+- [X] T081 [P] [US8] Implementar `frontend/src/api/editores.ts`: `GET/POST/DELETE` de `/api/organismos/:orgId/editores` (`usuarioId` wire string → number; `POST` con `{usuarioId: number}`; mensajes de los `400` documentados) y test de esquema en `frontend/tests/unit/api/editores.test.ts`
+- [X] T082 [US8] Implementar `frontend/src/routes/organismos/EditoresTab.tsx`: lista de editores visible para quien tiene acceso; agregar/quitar solo para propietario o admin (controles ocultos a un editor, con `403` del backend como respaldo mostrado con claridad); candidatos desde `GET /api/usuarios` excluyendo propietario y editores actuales
+- [X] T083 [US8] Test E2E en `frontend/tests/e2e/editores.spec.ts`: escenario 19
 
 **Checkpoint**: US8 completa.
 
@@ -262,8 +262,8 @@ description: "Task list — Frontend del Observatorio (005-frontend-cliente)"
 
 ### Implementation for User Story 9
 
-- [ ] T084 [US9] Implementar `frontend/src/routes/admin/AdminUsuariosPage.tsx`: tabla con email, roles y provincia (nombre desde el catálogo), buscador por email; columna de rol con control **deshabilitado** y texto que explique que el cambio de rol todavía no está disponible; ninguna acción dispara una petición de cambio
-- [ ] T085 [US9] Test E2E en `frontend/tests/e2e/admin-usuarios.spec.ts`: escenarios 21 y 22
+- [X] T084 [US9] Implementar `frontend/src/routes/admin/AdminUsuariosPage.tsx`: tabla con email, roles y provincia (nombre desde el catálogo), buscador por email; columna de rol con control **deshabilitado** y texto que explique que el cambio de rol todavía no está disponible; ninguna acción dispara una petición de cambio
+- [X] T085 [US9] Test E2E en `frontend/tests/e2e/admin-usuarios.spec.ts`: escenarios 21 y 22
 
 **Checkpoint**: las 9 historias completas.
 
@@ -273,12 +273,12 @@ description: "Task list — Frontend del Observatorio (005-frontend-cliente)"
 
 **Purpose**: cierre transversal
 
-- [ ] T086 [P] Suite de mapeo D13 en `frontend/tests/unit/api/contrato.test.ts` con respuestas wire reales grabadas de cada endpoint en `frontend/tests/unit/api/fixtures/` (escenario 26): camelCase uniforme, ids de usuario `string → number`, campo faltante o id no entero seguro → `ContratoInesperado`
-- [ ] T087 [P] Flujo de sesión vencida a mitad de formulario en `frontend/src/auth/sesionVencida.tsx`: aviso, re-login por contraseña sin recargar y sin perder lo tipeado (escenario 25, Edge Case de la spec); test E2E con mock de red en `frontend/tests/e2e/sesion-vencida.spec.ts`
-- [ ] T088 [P] Revisión de accesibilidad y responsive (foco, `aria-invalid`, sidebar → `sheet` en móvil) sobre login, formularios y diálogos, en `frontend/src/`
-- [ ] T089 [P] Escribir `frontend/README.md`: cómo correr (proxy `/api`, `BETTER_AUTH_URL=http://localhost:5173` en el backend, redirect de Google, `.env.example`), estructura y convenciones de mapeo (D13)
-- [ ] T090 Correr `npm run lint && npm run typecheck && npm test` y `npx playwright test` en `frontend/` y dejar todo en verde
-- [ ] T091 Ejecutar la validación completa de `specs/005-frontend-cliente/quickstart.md` (escenarios 0–26) y registrar el resultado, con lo que quedó "a validar" (Google, mensajes de triggers, nombres shadcn), en `docs/resultado-verificacion-frontend-<fecha>.md`
+- [X] T086 [P] Suite de mapeo D13 en `frontend/tests/unit/api/contrato.test.ts` con respuestas wire reales grabadas de cada endpoint en `frontend/tests/unit/api/fixtures/` (escenario 26): camelCase uniforme, ids de usuario `string → number`, campo faltante o id no entero seguro → `ContratoInesperado`
+- [X] T087 [P] Flujo de sesión vencida a mitad de formulario en `frontend/src/auth/sesionVencida.tsx`: aviso, re-login por contraseña sin recargar y sin perder lo tipeado (escenario 25, Edge Case de la spec); test E2E con mock de red en `frontend/tests/e2e/sesion-vencida.spec.ts`
+- [X] T088 [P] Revisión de accesibilidad y responsive (foco, `aria-invalid`, sidebar → `sheet` en móvil) sobre login, formularios y diálogos, en `frontend/src/`
+- [X] T089 [P] Escribir `frontend/README.md`: cómo correr (proxy `/api`, `BETTER_AUTH_URL=http://localhost:5173` en el backend, redirect de Google, `.env.example`), estructura y convenciones de mapeo (D13)
+- [X] T090 Correr `npm run lint && npm run typecheck && npm test` y `npx playwright test` en `frontend/` y dejar todo en verde
+- [X] T091 Ejecutar la validación completa de `specs/005-frontend-cliente/quickstart.md` (escenarios 0–26) y registrar el resultado, con lo que quedó "a validar" (Google, mensajes de triggers, nombres shadcn), en `docs/resultado-verificacion-frontend-<fecha>.md`
 
 ---
 

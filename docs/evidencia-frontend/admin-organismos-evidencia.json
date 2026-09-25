@@ -1,0 +1,27 @@
+{
+  "enVueloAlMaximoDeLaEvaluacion": [
+    "/api/organismos/237",
+    "/api/organismos/238",
+    "/api/organismos/239",
+    "/api/organismos/240",
+    "/api/organismos/241",
+    "/api/organismos/242"
+  ],
+  "medicion": {
+    "organismos": 121,
+    "requestsDeApi": 341,
+    "maximoEnVueloSegunLaApp": 6,
+    "maximoEnVueloSegunEventosDeRed": 7,
+    "milisegundos": 4571,
+    "resumen": "117 de 121 organismos completos.",
+    "completosSegunSql": 117,
+    "discrepanciasUiVsSql": 0
+  },
+  "pdf": {
+    "archivo": "completitud-organismos-2026-09-24.pdf",
+    "bytes": 146130,
+    "empiezaConPdf": true,
+    "paginas": 6
+  },
+  "fixturesRestantes": "0"
+}

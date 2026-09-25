@@ -1,0 +1,20 @@
+[
+  {
+    "id": "312",
+    "descripcion": "Pool de ejemplo 1",
+    "total_jueces": 3,
+    "provincia_id": 1
+  },
+  {
+    "id": "315",
+    "descripcion": "Pool de ejemplo 2",
+    "total_jueces": 36,
+    "provincia_id": 1
+  },
+  {
+    "id": "316",
+    "descripcion": "Pool de ejemplo 3",
+    "total_jueces": 6,
+    "provincia_id": 1
+  }
+]

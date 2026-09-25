@@ -1,0 +1,202 @@
+[
+  {
+    "codigo": "insercion_institucional",
+    "texto": "insercion_institucional",
+    "grupo": "institucional",
+    "tipoRespuesta": "opcion_unica",
+    "opciones": [
+      {
+        "codigo": "A",
+        "etiqueta": "Reemplazó algún organismo, absorviendo tareas que ahora les son propias"
+      },
+      {
+        "codigo": "B",
+        "etiqueta": "Se inserta como soporte al organismo o estructura tradicional que sigue existiendo"
+      },
+      {
+        "codigo": "C",
+        "etiqueta": "Otro"
+      }
+    ]
+  },
+  {
+    "codigo": "jerarquia_normativa",
+    "texto": "jerarquia_normativa",
+    "grupo": "institucional",
+    "tipoRespuesta": "opcion_unica",
+    "opciones": [
+      {
+        "codigo": "A",
+        "etiqueta": "Código Procesal"
+      },
+      {
+        "codigo": "B",
+        "etiqueta": "Ley Orgánica"
+      },
+      {
+        "codigo": "C",
+        "etiqueta": "Ley (No Código - No Ley Orgánica)"
+      },
+      {
+        "codigo": "D",
+        "etiqueta": "Acordada/Resolución STJ"
+      }
+    ]
+  },
+  {
+    "codigo": "dependencia",
+    "texto": "dependencia",
+    "grupo": "organizacion",
+    "tipoRespuesta": "opcion_unica",
+    "opciones": [
+      {
+        "codigo": "A",
+        "etiqueta": "Directamente de la Corte Suprema o Tribunal Superior de la Provincia"
+      },
+      {
+        "codigo": "B",
+        "etiqueta": "De una Coordinación o Dirección General"
+      },
+      {
+        "codigo": "C",
+        "etiqueta": "Jueces o colegio de jueces o parte jurisdiccional (foro, tribunal, etc.) a los que asiste"
+      },
+      {
+        "codigo": "D",
+        "etiqueta": "Otro"
+      }
+    ]
+  },
+  {
+    "codigo": "asistencia_jurisdiccional",
+    "texto": "asistencia_jurisdiccional",
+    "grupo": "organizacion",
+    "tipoRespuesta": "opcion_unica",
+    "opciones": [
+      {
+        "codigo": "A",
+        "etiqueta": "a un mismo organismo jurisdiccional siempre"
+      },
+      {
+        "codigo": "B",
+        "etiqueta": "a más de un mismo organismo jurisdiccional siempre"
+      },
+      {
+        "codigo": "C",
+        "etiqueta": "un órgano colegiado de jueces (foro, cámara, colegio, etc)"
+      }
+    ]
+  },
+  {
+    "codigo": "autonomia",
+    "texto": "autonomia",
+    "grupo": "gestion",
+    "tipoRespuesta": "opcion_unica",
+    "opciones": [
+      {
+        "codigo": "A",
+        "etiqueta": "por decisión de la propia oficina judicial"
+      },
+      {
+        "codigo": "B",
+        "etiqueta": "A requerimiento de otro organismo"
+      },
+      {
+        "codigo": "C",
+        "etiqueta": "No da soporte a la actividad jurisdiccional"
+      },
+      {
+        "codigo": "D",
+        "etiqueta": "Otro"
+      }
+    ]
+  },
+  {
+    "codigo": "alcance_proceso",
+    "texto": "alcance_proceso",
+    "grupo": "implementacion",
+    "tipoRespuesta": "opcion_unica",
+    "opciones": [
+      {
+        "codigo": "A",
+        "etiqueta": "En todo el proceso hasta la resolución definitiva (gestiona el caso)"
+      },
+      {
+        "codigo": "B",
+        "etiqueta": "Parcialmente, a partir de una etapa procesal específica"
+      },
+      {
+        "codigo": "C",
+        "etiqueta": "Parcialmente, gestionando un acto procesal específico (por ej., audiencia o juicio por jurados)"
+      },
+      {
+        "codigo": "D",
+        "etiqueta": "Otro"
+      }
+    ]
+  },
+  {
+    "codigo": "alcance_fuero",
+    "texto": "alcance_fuero",
+    "grupo": "implementacion",
+    "tipoRespuesta": "opcion_unica",
+    "opciones": [
+      {
+        "codigo": "A",
+        "etiqueta": "Organismo que asiste a todo el fuero sin excepción"
+      },
+      {
+        "codigo": "B",
+        "etiqueta": "Organismo que asiste a gran parte del fuero"
+      },
+      {
+        "codigo": "C",
+        "etiqueta": "Organismo que asiste a una parte específica del fuero"
+      },
+      {
+        "codigo": "E",
+        "etiqueta": "Otro"
+      }
+    ]
+  },
+  {
+    "codigo": "presencia_territorial",
+    "texto": "presencia_territorial",
+    "grupo": "implementacion",
+    "tipoRespuesta": "opcion_unica",
+    "opciones": [
+      {
+        "codigo": "A",
+        "etiqueta": "Único organismo, competencia provincial"
+      },
+      {
+        "codigo": "B",
+        "etiqueta": "Implementada solo en circunscripción capital"
+      },
+      {
+        "codigo": "C",
+        "etiqueta": "Están presente en solamente algunas de las Circunscripciones Judiciales"
+      },
+      {
+        "codigo": "D",
+        "etiqueta": "Ubicadas en las cabeceras de cada Circunscripción Judicial, y tienen subdelegaciones en otras localidades de esa Circunscripción"
+      }
+    ]
+  },
+  {
+    "codigo": "grado_implementacion",
+    "texto": "grado_implementacion",
+    "grupo": "implementacion",
+    "tipoRespuesta": "opcion_unica",
+    "opciones": [
+      {
+        "codigo": "A",
+        "etiqueta": "Implementada"
+      },
+      {
+        "codigo": "B",
+        "etiqueta": "En proceso"
+      }
+    ]
+  }
+]

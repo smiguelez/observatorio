@@ -1,0 +1,15 @@
+{
+  "organismosEnBase": 117,
+  "deFixtures": 0,
+  "filasEnUi": 117,
+  "soloEnUi": [],
+  "soloEnSql": [],
+  "completosUi": 115,
+  "completosSql": 115,
+  "discrepancias": 0,
+  "resumen": "115 de 117 organismos completos.",
+  "incompletos": [
+    "242",
+    "266"
+  ]
+}

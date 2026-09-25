@@ -13,6 +13,7 @@ Convenciones del cliente
 - Errores: `{ "error": string }` (+ `preguntasQueSePerderian` en un caso). Los
   de Better Auth (`/api/auth/*`) son `{ code, message }`.
 - `204` = sin cuerpo (DELETE): no llamar `.json()`.
+- **Regla real (verificada el 2026-09-24 con respuestas grabadas, `frontend/tests/unit/api/fixtures/real/`)**: TODA columna `bigint` llega como **string** — ids de organismo, UF, pool, asignación, localidad y usuario, y sus FK (`propietario_id`, `organismo_id`, `localidad_id`, `grupoJuecesId`, `usuarioId`) —, aun en los recursos camelCase; las `smallint` (`tipo_oficina_id`, `tipo_uf_id`, `provincia_id`, `anio_implementacion`) y `integer` llegan como number. Las tablas de más abajo indican `string→number` solo donde importa; la regla vale para todos.
 - **Mapeo (D13)**: cada respuesta pasa por un esquema zod por recurso que la
   valida, la pasa a camelCase ("snake" = viene en snake_case) y convierte los
   **ids de usuario `string → number`** (`usuarios.id` es `bigint` y la API lo
@@ -39,7 +40,7 @@ Convenciones del cliente
 `GET /api/provincias | /api/denominaciones-simplificadas | /api/tipos-oficina | /api/tipos-uf | /api/fueros`
 → `[{ id: number, nombre: string }]` (orden por `id`).
 
-`GET /api/localidades` → `[{ id, nombre, provincia_id, latitud, longitud }]` (snake; **todas**, sin filtro; el combo de UF se filtra en el cliente por la provincia del organismo).
+`GET /api/localidades` → `[{ id (bigint: string→number), nombre, provincia_id, latitud, longitud }]` (snake; **todas**, sin filtro; el combo de UF se filtra en el cliente por la provincia del organismo).
 
 Se cargan una vez por sesión (`staleTime: Infinity`).
 
@@ -47,7 +48,7 @@ Se cargan una vez por sesión (`staleTime: Infinity`).
 
 | Llamada | Respuesta |
 |---|---|
-| `GET /api/organismos` | `[{ id: number, denominacion: string, propietario_id: string }]` (snake) — propios + los que edita; admin: todos |
+| `GET /api/organismos` | `[{ id: string→number, denominacion: string, propietario_id: string→number }]` (snake) — propios + los que edita; admin: todos |
 | `POST /api/organismos` body `{denominacion, denominacionSimplificadaId, tipoOficinaId, provinciaId}` (todos obligatorios, enteros salvo denominación) | `201 { id, denominacion, propietario_id }` · el body no puede fijar propietario · el backend **no** compara `provinciaId` con la del usuario: que sea fija para `usuario_normal` es UX (decisión 6) |
 | `GET /api/organismos/:id` | `SELECT *` de `organismos` (snake): incluye al menos `id, denominacion, denominacion_simplificada_id, tipo_oficina_id, provincia_id, propietario_id, estado_fueros, actualizado_a, firestore_id`. **Los campos exactos los define `db/schema.sql`; el mapper solo declara los que el cliente usa.** · `403` no autorizado · `404` |
 | `PATCH /api/organismos/:id` body parcial (incluye `provinciaId`: solo el admin tiene el control en la UI, decisión 6) + `confirmarPerdidaTaxonomia?: boolean` | `200 { id, denominacion, propietario_id }` · **`400 { error, preguntasQueSePerderian: [{codigo,texto}] }`** si cambiar `tipoOficinaId` dejaría respuestas sin aplicar y no vino la confirmación (Protección B) |
@@ -74,7 +75,7 @@ Base: `/api/organismos/:orgId/unidades-funcionales/:ufId/asignaciones-jueces`
 
 | Llamada | Respuesta |
 |---|---|
-| `GET` | `[{ id, grupoJuecesId, cantidadAsignada }]` (camel) |
+| `GET` | `[{ id, grupoJuecesId, cantidadAsignada }]` (camel, pero **`id` y `grupoJuecesId` son bigint => string**; `cantidadAsignada` number) |
 | `POST {grupoJuecesId, cantidadAsignada}` | `201` asignación · `400 {error}` con uno de: `"Ya existe una asignación de esta unidad funcional a ese pool."`, `"La cantidad asignada debe ser mayor a 0."`, `"El pool de jueces indicado no existe."` |
 | `PATCH /:asignacionId {cantidadAsignada}` | `200` asignación · `400` (cantidad) · `404` |
 | `DELETE /:asignacionId` | `204` · `404` |
@@ -83,7 +84,7 @@ Cambiar el pool de una asignación = `DELETE` + `POST` (no hay edición in-place
 
 ## Pools de jueces (existente desde `002`) — solo se consumen desde el diálogo de asignación
 
-`GET /api/pools-jueces` → `[{ id, descripcion, total_jueces, provincia_id }]` (snake; alcance = provincia del usuario, admin: todos).
+`GET /api/pools-jueces` → `[{ id (bigint: string→number), descripcion, total_jueces, provincia_id }]` (snake; alcance = provincia del usuario, admin: todos).
 `POST {provinciaId, descripcion?, totalJueces (>=0)}` → `201` pool · `403` si la provincia no es la del usuario y no es admin. El diálogo envía la provincia del organismo si es admin, la del usuario si no.
 `PATCH /:id {descripcion?, totalJueces?}` → `200` pool.
 `DELETE /:id` → `204`. **Con asignaciones existentes responde `500`** (FK sin `ON DELETE`, ruta sin captura; brecha G6): el cliente lo trata como "no se pudo eliminar, el pool puede estar asignado a otras UF".

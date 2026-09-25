@@ -45,19 +45,19 @@ describe('guardas de ruta', () => {
     expect(router.state.location.pathname).toBe('/organismos')
   })
 
-  it('usuario normal en /admin/usuarios: ve la MISMA vista que una ruta inexistente', () => {
+  it('usuario normal en /admin/usuarios: el CONTENIDO es el MISMO que ante una ruta inexistente', () => {
     montar('/admin/usuarios', normal)
-    const enAdmin = document.body.textContent
+    const contenidoAdmin = screen.getByTestId('contenido').textContent
     expect(screen.getByText('Página no encontrada')).toBeInTheDocument()
-    expect(screen.queryByText('Usuarios')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Usuarios' })).not.toBeInTheDocument()
     document.body.innerHTML = ''
     montar('/ruta-que-no-existe', normal)
-    expect(document.body.textContent).toBe(enAdmin)
+    expect(screen.getByTestId('contenido').textContent).toBe(contenidoAdmin)
   })
 
   it('admin accede a /admin/usuarios', () => {
     montar('/admin/usuarios', admin)
-    expect(screen.getByText('Usuarios')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Usuarios' })).toBeInTheDocument()
   })
 
   it.each(['/pools', '/registro', '/signup'])('%s no existe (404), ni con sesión', (ruta) => {

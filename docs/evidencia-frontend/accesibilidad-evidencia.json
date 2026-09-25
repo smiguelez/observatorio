@@ -1,0 +1,73 @@
+{
+  "pantallas": [
+    {
+      "pantalla": "login",
+      "violaciones": []
+    },
+    {
+      "pantalla": "login (móvil 390px)",
+      "violaciones": []
+    },
+    {
+      "pantalla": "lista de organismos",
+      "violaciones": []
+    },
+    {
+      "pantalla": "alta de organismo",
+      "violaciones": []
+    },
+    {
+      "pantalla": "detalle: datos",
+      "violaciones": []
+    },
+    {
+      "pantalla": "taxonomía (formulario dinámico)",
+      "violaciones": []
+    },
+    {
+      "pantalla": "editores",
+      "violaciones": []
+    },
+    {
+      "pantalla": "unidades funcionales (lista)",
+      "violaciones": []
+    },
+    {
+      "pantalla": "unidad funcional (formulario)",
+      "violaciones": []
+    },
+    {
+      "pantalla": "perfil",
+      "violaciones": []
+    },
+    {
+      "pantalla": "ajustes",
+      "violaciones": []
+    },
+    {
+      "pantalla": "diálogo de asignación: pestaña asignar",
+      "violaciones": []
+    },
+    {
+      "pantalla": "diálogo de asignación: pestaña pools",
+      "violaciones": []
+    },
+    {
+      "pantalla": "menú de usuario abierto",
+      "violaciones": []
+    },
+    {
+      "pantalla": "admin: usuarios",
+      "violaciones": []
+    },
+    {
+      "pantalla": "admin: completitud de organismos",
+      "violaciones": []
+    },
+    {
+      "pantalla": "móvil: menú lateral abierto (sheet)",
+      "violaciones": []
+    }
+  ],
+  "fixturesRestantes": "0"
+}

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { http, parsear } from './http'
+import { idWire } from './ids'
 
 export interface Catalogo {
   id: number
@@ -35,9 +36,9 @@ const numeroONull = z
 
 const LocalidadWire = z
   .object({
-    id: z.number().int(),
+    id: idWire, // localidades.id es bigint => string en el wire
     nombre: z.string(),
-    provincia_id: z.number().int(),
+    provincia_id: idWire,
     latitud: numeroONull,
     longitud: numeroONull,
   })

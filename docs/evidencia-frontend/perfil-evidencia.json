@@ -1,0 +1,18 @@
+{
+  "datosEnBase": "Persona de Prueba/Córdoba",
+  "metodosConClave": [
+    "Contraseña: activa",
+    "Google: no vinculado",
+    "Enlace por email: disponible con el email de tu cuenta"
+  ],
+  "cambioDePassword": {
+    "viejaRechazada": true,
+    "nuevaAceptada": true
+  },
+  "metodosSinClave": [
+    "Contraseña: no configurada",
+    "Google: no vinculado",
+    "Enlace por email: disponible con el email de tu cuenta"
+  ],
+  "fixturesRestantes": "0"
+}

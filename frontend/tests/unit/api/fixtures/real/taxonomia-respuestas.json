@@ -1,0 +1,16 @@
+[
+  {
+    "pregunta": {
+      "codigo": "insercion_institucional",
+      "texto": "insercion_institucional",
+      "grupo": "institucional",
+      "tipoRespuesta": "opcion_unica"
+    },
+    "opciones": [
+      {
+        "codigo": "A",
+        "etiqueta": "Reemplazó algún organismo, absorviendo tareas que ahora les son propias"
+      }
+    ]
+  }
+]

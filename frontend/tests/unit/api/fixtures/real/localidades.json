@@ -1,0 +1,37 @@
+[
+  {
+    "id": "261",
+    "nombre": "Ushuaia",
+    "provincia_id": 23,
+    "latitud": -54.80722558559848,
+    "longitud": -68.30547849321061
+  },
+  {
+    "id": "262",
+    "nombre": "Salta",
+    "provincia_id": 17,
+    "latitud": -23.2499521,
+    "longitud": -63.3365558
+  },
+  {
+    "id": "263",
+    "nombre": "San Nicolás de los Arroyos",
+    "provincia_id": 1,
+    "latitud": -33.3310506065996,
+    "longitud": -60.209467404239255
+  },
+  {
+    "id": "264",
+    "nombre": "Rawson",
+    "provincia_id": 5,
+    "latitud": -43.3015853,
+    "longitud": -65.0705776
+  },
+  {
+    "id": "265",
+    "nombre": "San Pedro de Jujuy",
+    "provincia_id": 10,
+    "latitud": -24.23041734,
+    "longitud": -64.86987745
+  }
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "nombre": "oficina judicial"
+  },
+  {
+    "id": 2,
+    "nombre": "oficina judicial especializada"
+  },
+  {
+    "id": 3,
+    "nombre": "coordinación"
+  },
+  {
+    "id": 4,
+    "nombre": "unidad operativa"
+  }
+]

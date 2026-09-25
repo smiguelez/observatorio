@@ -1,0 +1,12 @@
+{
+  "id": "811",
+  "denominacion": "test-frontend-fx org",
+  "denominacion_simplificada_id": 1,
+  "tipo_oficina_id": 1,
+  "provincia_id": 1,
+  "propietario_id": "1274",
+  "estado_fueros": "sin_fueros_asignados",
+  "legacy_id": null,
+  "actualizado_a": "2026-09-24T20:45:40.595Z",
+  "firestore_id": "api:3cbf9ea4-a929-40ac-addf-ba81c20579bd"
+}

@@ -1,0 +1,23 @@
+{
+  "preguntasRenderizadas": 9,
+  "tiposEnLaBase": [
+    "opcion_unica"
+  ],
+  "respuestasEnBase": [
+    "insercion_institucional:B",
+    "jerarquia_normativa:A",
+    "dependencia:A",
+    "alcance_proceso:A"
+  ],
+  "pedidosSinTaxonomia": [
+    "GET /src/api/taxonomia.ts",
+    "GET /api/taxonomia/preguntas?tipoOficinaId=3"
+  ],
+  "errorReal": {
+    "estadosPut": [
+      400
+    ],
+    "mensaje": "No se pudo guardar la taxonomía.evaluaciones_taxonomicas: la pregunta 1 no aplica al tipo de organismo actual (tipo_oficina_id=3) del organismo 749 (Protección A)"
+  },
+  "fixturesRestantes": "0"
+}

@@ -15,7 +15,11 @@ const Esquema = z.object({
 type Valores = z.infer<typeof Esquema>
 
 interface Props {
-  callbackURL: string
+  /**
+   * Con `callbackURL`, Better Auth hace que el cliente NAVEGUE (recarga completa) a esa URL tras el login. En el
+   * re-ingreso por sesión vencida se omite a propósito: la pantalla no debe recargarse.
+   */
+  callbackURL?: string
   alExito: () => void
   alElegirOtroMetodo: () => void
 }
@@ -27,7 +31,7 @@ export default function PasswordForm({ callbackURL, alExito, alElegirOtroMetodo 
   async function enviar(v: Valores) {
     setFallo(false)
     try {
-      const { error } = await authClient.signIn.email({ email: v.email, password: v.password, callbackURL })
+      const { error } = await authClient.signIn.email({ email: v.email, password: v.password, ...(callbackURL ? { callbackURL } : {}) })
       // Cualquier error (credencial errónea, cuenta inexistente, invalidada, red, 5xx):
       // el MISMO mensaje. Ni el `code` ni el `message` del servidor se muestran ni se usan.
       if (error) setFallo(true)

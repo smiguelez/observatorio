@@ -1,0 +1,14 @@
+{
+  "id": "926",
+  "organismo_id": "811",
+  "denominacion_unidad": "uf fx",
+  "localidad_id": "263",
+  "tipo_uf_id": 1,
+  "anio_implementacion": 2020,
+  "domicilio": "Calle 1",
+  "telefono": null,
+  "mail": null,
+  "responsable": null,
+  "codigo_postal": null,
+  "firestore_id": "api:85967bae-1a49-48e6-b570-ba1d4ecb216b"
+}

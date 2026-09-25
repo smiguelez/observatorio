@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1,
+    "nombre": "Delegación"
+  },
+  {
+    "id": 2,
+    "nombre": "Subdelegación"
+  },
+  {
+    "id": 3,
+    "nombre": "Área Específica"
+  }
+]

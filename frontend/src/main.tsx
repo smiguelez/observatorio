@@ -4,13 +4,16 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@ta
 import './index.css'
 import App from './App.tsx'
 import { ApiError } from '@/api/http'
+import { marcarSesionVencida } from '@/auth/sesionVencida'
 import { CLAVE_SESION } from '@/auth/useSesion'
 
-// Un 401 en cualquier llamada => la sesión ya no es válida: se descarta y las
-// guardas redirigen a /login?returnTo=... (FR-020, Edge Case de sesión vencida).
+// Un 401 en cualquier llamada => la sesión ya no es válida. Si había una sesión activa, se avisa con el
+// diálogo de re-ingreso SIN desmontar la pantalla (para no perder lo que se estaba escribiendo — Edge Case
+// de la spec); si no la había, las guardas redirigen a /login?returnTo=... (FR-020).
 function alFallar(error: unknown) {
   if (error instanceof ApiError && error.status === 401) {
-    queryClient.setQueryData(CLAVE_SESION, null)
+    if (queryClient.getQueryData(CLAVE_SESION)) marcarSesionVencida()
+    else queryClient.setQueryData(CLAVE_SESION, null)
   }
 }
 

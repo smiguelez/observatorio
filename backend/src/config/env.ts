@@ -35,3 +35,15 @@ export function loadAuthConfig(): AuthConfig {
 export function loadPort(): number {
   return Number(process.env.PORT ?? 3000)
 }
+
+// 007 (FR-016/FR-022): vigencia del acceso inicial que un admin entrega a mano
+// (no hay envío de correo hasta la Fase C, por eso se mide en horas).
+export function loadAccesoInicialTtlHoras(): number {
+  const raw = process.env.ACCESO_INICIAL_TTL_HORAS
+  if (raw === undefined || raw === '') return 24
+  const horas = Number(raw)
+  if (!Number.isInteger(horas) || horas <= 0) {
+    throw new Error('ACCESO_INICIAL_TTL_HORAS debe ser un entero mayor que 0 (horas)')
+  }
+  return horas
+}

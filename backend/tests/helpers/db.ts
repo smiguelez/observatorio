@@ -5,6 +5,9 @@
 // de correr.
 import type pg from 'pg'
 import type { FastifyInstance } from 'fastify'
+import { getPgPool } from '../../src/db/pool.js'
+import { provisionarUsuario } from '../../src/services/usuarios.js'
+import { emitirAccesoInicial, canjearAccesoInicial } from '../../src/auth/acceso-inicial.js'
 
 export async function limpiarUsuariosDePrueba(pool: pg.Pool, prefix: string) {
   const patron = `${prefix}%`
@@ -29,6 +32,11 @@ export async function limpiarUsuariosDePrueba(pool: pg.Pool, prefix: string) {
     [patron],
   )
   await pool.query(`DELETE FROM auth.verification WHERE value LIKE $1`, [`%${prefix}%`])
+  // Los accesos iniciales (`reset-password:*`) guardan el id del usuario, no su email (007).
+  await pool.query(
+    `DELETE FROM auth.verification WHERE identifier LIKE 'reset-password:%' AND value IN (SELECT id::text FROM usuarios WHERE email LIKE $1)`,
+    [patron],
+  )
   await pool.query(`DELETE FROM auth."user" WHERE email LIKE $1`, [patron])
   await pool.query(`DELETE FROM usuarios WHERE email LIKE $1`, [patron])
 }
@@ -44,17 +52,31 @@ export interface UsuarioDePrueba {
   cookie: string
 }
 
-// Alta por contraseña + extracción de cookie, para no repetir esto en cada
-// test de organismos/UF/taxonomía.
-export async function crearUsuarioDePrueba(app: FastifyInstance, email: string): Promise<UsuarioDePrueba> {
-  const res = await app.inject({
-    method: 'POST',
-    url: '/api/auth/sign-up/email',
-    payload: { email, password: 'contrasena-test-12345', name: 'Test' },
+// 007: el alta pública por contraseña ya no existe. El usuario de prueba se da
+// de alta por el MISMO servicio que la ruta (provisión) y entra por el canje
+// del acceso inicial, que ya deja una sesión iniciada.
+export const PASSWORD_DE_PRUEBA = 'contrasena-test-12345'
+
+export async function crearUsuarioDePrueba(
+  _app: FastifyInstance,
+  email: string,
+  opciones: { rol?: 'admin' | 'usuario_normal'; provinciaId?: number | null } = {},
+): Promise<UsuarioDePrueba> {
+  const pool = getPgPool()
+  const rol = opciones.rol ?? 'usuario_normal'
+  const usuario = await provisionarUsuario(pool, {
+    email,
+    rol,
+    provinciaId: opciones.provinciaId === undefined ? PROVINCIA_DE_PRUEBA : opciones.provinciaId,
+    nombreDisplay: 'Test',
   })
-  if (res.statusCode !== 200) throw new Error(`sign-up falló para ${email}: ${res.statusCode} ${res.body}`)
-  return { usuarioId: res.json().user.id, cookie: extraerCookie(res.headers['set-cookie']) }
+  const acceso = await emitirAccesoInicial(pool, usuario.id)
+  const canje = await canjearAccesoInicial(pool, acceso.token, PASSWORD_DE_PRUEBA)
+  return { usuarioId: usuario.id, cookie: extraerCookie(canje.setCookie) }
 }
+
+// Provincia por defecto de los usuarios de prueba (el servicio exige una para el usuario normal).
+const PROVINCIA_DE_PRUEBA = 1
 
 export async function hacerAdmin(pool: pg.Pool, usuarioId: string) {
   await pool.query(
@@ -73,5 +95,40 @@ export async function asignarProvincia(pool: pg.Pool, usuarioId: string, provinc
 // (no hay "creado_por"); se limpia por prefijo de `descripcion`, que los
 // tests de pools usan a propósito para poder identificar sus propias filas.
 export async function limpiarPoolsDePrueba(pool: pg.Pool, prefix: string) {
+  // Una asignación a una UF impide borrar el pool (FK sin cascade): se quita primero, por si un test falló a mitad.
+  await pool.query(
+    'DELETE FROM unidad_funcional_grupo_jueces WHERE grupo_jueces_id IN (SELECT id FROM grupos_jueces WHERE descripcion LIKE $1)',
+    [`${prefix}%`],
+  )
   await pool.query('DELETE FROM grupos_jueces WHERE descripcion LIKE $1', [`${prefix}%`])
+}
+
+// Simula a uno de los 47 usuarios migrados: existe en `usuarios` (con rol y
+// provincia) pero todavía NO tiene fila en auth."user" ni credenciales.
+export async function provisionarSinIdentidad(
+  pool: pg.Pool,
+  email: string,
+  provinciaId = 1,
+): Promise<string> {
+  const { rows } = await pool.query<{ id: string }>(
+    `INSERT INTO usuarios (email, provincia_id, firestore_id) VALUES ($1::text, $2, $1::text) RETURNING id::text`,
+    [email, provinciaId],
+  )
+  await pool.query(
+    `INSERT INTO usuario_roles (usuario_id, rol_id) VALUES ($1, (SELECT id FROM roles WHERE nombre = 'usuario_normal'))`,
+    [rows[0]!.id],
+  )
+  return rows[0]!.id
+}
+
+// Cuenta filas de identidad de un email, para afirmar "0 filas" tras un rechazo (FR-002).
+export async function contarIdentidad(pool: pg.Pool, email: string) {
+  const n = async (sql: string) => (await pool.query(sql, [email.trim().toLowerCase()])).rows[0].n as number
+  return {
+    usuarios: await n(`SELECT count(*)::int n FROM usuarios WHERE email = $1`),
+    authUser: await n(`SELECT count(*)::int n FROM auth."user" WHERE email = $1`),
+    cuentas: await n(`SELECT count(*)::int n FROM auth.account WHERE "userId" IN (SELECT id FROM auth."user" WHERE email = $1)`),
+    sesiones: await n(`SELECT count(*)::int n FROM auth.session WHERE "userId" IN (SELECT id FROM auth."user" WHERE email = $1)`),
+    verificaciones: await n(`SELECT count(*)::int n FROM auth.verification WHERE value LIKE '%' || $1 || '%'`),
+  }
 }

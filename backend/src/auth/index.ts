@@ -6,7 +6,8 @@ import { betterAuth } from 'better-auth'
 import { PostgresDialect } from 'kysely'
 import { getPgPool } from '../db/pool.js'
 import { loadAuthConfig } from '../config/env.js'
-import { crearHookIdentidad } from './identity-hook.js'
+import { createAuthMiddleware } from 'better-auth/api'
+import { crearHookIdentidad, buscarUsuarioIdPorEmail } from './identidad-hook.js'
 import { configPassword } from './providers/password.js'
 import { configGoogle } from './providers/google.js'
 import { configMagicLink } from './providers/magic-link.js'
@@ -29,6 +30,20 @@ export const auth = betterAuth({
     },
   },
   ...configPassword,
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // 007 (FR-003, FR-006): el pedido de enlace de un email NO dado de alta responde igual que el de uno
+      // dado de alta, pero no crea ningún token ni registra ningún enlace. El email se normaliza.
+      if (ctx.path === '/sign-in/magic-link' && typeof ctx.body?.email === 'string') {
+        const email = ctx.body.email.trim().toLowerCase()
+        ctx.body.email = email
+        if ((await buscarUsuarioIdPorEmail(pool, email)) === null) return ctx.json({ status: true })
+      }
+      // 007 (FR-018, Decisión 9): cambiar la contraseña cierra las demás sesiones SIEMPRE, no solo si el cliente
+      // lo pide. Better Auth revoca todas, crea una nueva y la entrega en Set-Cookie (la cookie rota).
+      if (ctx.path === '/change-password' && ctx.body) ctx.body.revokeOtherSessions = true
+    }),
+  },
   ...configGoogle(),
   plugins: [configMagicLink()],
   // T017 (FR-010): un segundo método solo se vincula implícitamente a una

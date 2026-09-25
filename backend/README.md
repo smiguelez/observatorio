@@ -34,6 +34,7 @@ cargadas por `src/config/env.ts`:
 | `BETTER_AUTH_SECRET` | secreto de firma de sesión/cookies de Better Auth. |
 | `BETTER_AUTH_URL` | **obligatoria.** URL pública (origen) desde la que el navegador accede a la app, p. ej. `http://localhost:5173` en desarrollo con el frontend de `005` detrás del proxy de Vite, o el dominio real en producción. Better Auth la toma directamente del entorno (no pasa por `src/config/env.ts`) y la usa como único origen confiable: **sin ella, todo `POST` que lleve cookie de sesión responde `403 INVALID_ORIGIN`, incluso desde el mismo origen del backend**, sin importar el `Host`/`Origin` ni `changeOrigin` de un proxy (verificado el 2026-09-24 en `docs/resultado-verificacion-frontend-cookies-20260924.md`). No hay CORS configurado: el cliente debe ir same-origin. Los tests de `backend/` (`app.inject`) corren sin ella (verificado el 2026-09-24 con `tests/contract/auth.test.ts` y `organismos.test.ts`), por eso no figura en el comando de tests. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | credenciales OAuth de Google (Principio III). |
+| `ACCESO_INICIAL_TTL_HORAS` | opcional, default `24`. Vigencia (en horas, entero > 0) del acceso inicial que un administrador entrega a un usuario recién dado de alta (007). |
 | `PORT` | puerto HTTP (default `3000`). |
 
 No hay todavía una variable para un proveedor de email real — ver
@@ -108,14 +109,15 @@ rastro en `usuarios`/`organismos`/`grupos_jueces`/`localidades`. Ver
 ```
 src/
 ├── auth/          # Instancia de Better Auth, hook de identidad (Principio V),
-│                  # proveedores (password/google/magic-link)
+│                  # proveedores (password/google/magic-link), acceso inicial (007)
 ├── authz/         # Reglas de autorización puras (esAdmin, esOwnerOEditor,
 │                  # mismaProvincia) — traducción 1:1 de
 │                  # docs/firestore-rules-actuales.rules
-├── routes/        # organismos, pools-jueces, usuarios, localidades, auth
+├── services/      # provisión de usuarios, rol, provincia (007; transacciones)
+├── routes/        # organismos, pools-jueces, usuarios, localidades, auth, acceso-inicial
 ├── db/            # Pool de conexión pg (mismo patrón que migration/) +
 │                  # kysely.ts (instancia dedicada a migrate:public)
-├── http/          # Helpers de bridging Fastify <-> Fetch API
+├── http/          # Bridging Fastify <-> Fetch API + manejador central de errores (007)
 └── config/        # Carga de variables de entorno (Principio XIII)
 
 migrations/        # Migraciones versionadas de public.* (Migrator de
@@ -186,6 +188,34 @@ rechazos a un `400` identificable, el mismo problema que `004` (D11) ya
 había resuelto para triggers con `RAISE EXCEPTION`, ahora también para
 constraints declarativos simples.
 
+## Identidad y autorización (`007-identidad-autorizacion`)
+
+Contrato completo: `specs/007-identidad-autorizacion/contracts/api.md`. Resumen operativo:
+
+- **Nadie se da de alta solo.** Solo existen identidades para emails que ya están en `usuarios`
+  (`src/auth/identidad-hook.ts`, por los tres métodos). No hay alta pública por contraseña
+  (`disableSignUp`). El pedido de enlace de un email no dado de alta responde igual que el de uno dado de alta,
+  pero no genera ni registra ningún enlace.
+- **Cómo dar de alta a alguien** (solo admin): `POST /api/usuarios` con `{ email, rol, provinciaId }`. La respuesta
+  trae, **una sola vez**, el `accesoInicial` (`token` + `vence`). El admin se lo hace llegar a la persona (no hay
+  correo hasta la Fase C; se recomienda un enlace con el token en el **fragmento**: `…/primer-acceso#token=…`).
+  La persona lo canjea en `POST /api/acceso-inicial/canjear { token, password }` (ruta pública, un solo uso), que fija su
+  contraseña y deja la sesión iniciada. Si lo pierde: `POST /api/usuarios/:id/acceso-inicial` emite uno nuevo y el
+  anterior deja de servir. Vencimiento: `ACCESO_INICIAL_TTL_HORAS` (24 por defecto).
+- **Provincia y rol** los escribe solo un admin (`PATCH /api/usuarios/:id` con `provinciaId`; `PUT /api/usuarios/:id/rol`).
+  Rigen en la siguiente solicitud del afectado, sin re-login. El sistema nunca queda sin administradores.
+- **Cambiar la contraseña**: `POST /api/auth/change-password`. El servidor cierra siempre las demás sesiones y
+  **rota la cookie de sesión** de la actual: el cliente debe aceptar el nuevo `Set-Cookie` (el navegador lo hace solo;
+  un cliente que guarde el token a mano debe leer el nuevo).
+- **Errores**: `http/errores-integridad.ts` traduce los rechazos de integridad causados por el cliente a `400 { error }`;
+  lo inesperado sigue siendo `500`. Los rechazos de taxonomía traen `preguntaCodigo` y `preguntaTexto`.
+- **Migración `0004`** (solo funciones, reversible): mensajes legibles de los triggers de taxonomía.
+- **Pruebas**: el alta pública dejó de existir; `crearUsuarioDePrueba` (`tests/helpers/db.ts`) da de alta por el mismo
+  servicio que la ruta y canjea el acceso inicial. La regla del último administrador se prueba en un esquema aislado
+  (`tests/integration/ultimo-admin.test.ts`) para no tocar jamás el rol de los administradores reales.
+- **Spikes** (`scripts/spike-007-*.ts`) se conservan como test de humo de compatibilidad con `better-auth@1.7.5`
+  (versión fijada): `BETTER_AUTH_URL=http://localhost:5173 npx tsx scripts/spike-007-identidad.ts` debe dar `19/19 casos PASS`.
+
 ## Limitaciones conocidas (deuda reconocida, no silenciosa)
 
 - **Rate limiting de login fallido no implementado** (Principio IV, SHOULD
@@ -193,7 +223,9 @@ constraints declarativos simples.
   de qué se verificó y por qué queda pendiente.
 - **Envío de magic link es un placeholder que loguea el link** (no hay
   proveedor de email real decidido todavía) — ver
-  `src/auth/providers/magic-link.ts`.
+  `src/auth/providers/magic-link.ts`. Desde `007` solo se registra el de emails dados de alta.
+- **El canje del acceso inicial es público y sin rate limiting** (D10, Fase E): se apoya en un token de un solo uso,
+  alta entropía y vencimiento. `POST /api/auth/reset-password` (de Better Auth) sigue alcanzable con el mismo token.
 - **El puente Fastify↔Better Auth re-serializa el body ya parseado por
   Fastify** (`src/app.ts`) en vez de reenviar el buffer crudo — funciona
   para JSON (todos los endpoints de Better Auth lo son), pero es una

@@ -15,7 +15,7 @@ import { Type, type Static } from '@sinclair/typebox'
 import type pg from 'pg'
 import { getPgPool } from '../db/pool.js'
 import { conTransaccion } from '../db/transaction.js'
-import { esRechazoDeTrigger, esRechazoDeIntegridad, mensajeDeIntegridad } from '../http/trigger-error.js'
+import { ErrorNegocio } from '../http/errores-integridad.js'
 import { esAdmin } from '../authz/rules.js'
 import { buscarOrganismoParaAutorizar, puedeGestionarOrganismo } from '../authz/organismos.js'
 
@@ -87,6 +87,18 @@ const ReemplazarTaxonomiaBody = Type.Object({
   respuestas: Type.Array(RespuestaTaxonomiaItem),
 })
 type ReemplazarTaxonomiaBody = Static<typeof ReemplazarTaxonomiaBody>
+
+interface PreguntaTaxonomia {
+  id: number
+  codigo: string
+  texto: string
+  tipo_respuesta: string
+}
+
+// Mismo rótulo que taxonomia_pregunta_rotulo() (migración 0004): «codigo», más (texto) si difiere.
+function rotuloPregunta(p: { codigo: string; texto: string }): string {
+  return `«${p.codigo}»${p.texto !== p.codigo ? ` (${p.texto})` : ''}`
+}
 
 function idParam(request: { params: unknown }, campo = 'id'): number {
   return Number((request.params as Record<string, string>)[campo])
@@ -385,21 +397,15 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
       const ufId = idParam(request, 'ufId')
       if (!(await verificarUF(orgId, ufId))) return reply.code(404).send({ error: 'No encontrado' })
 
-      try {
-        const { rows } = await pool.query(
-          `INSERT INTO unidad_funcional_grupo_jueces (unidad_funcional_id, grupo_jueces_id, cantidad_asignada)
-           VALUES ($1, $2, $3)
-           RETURNING id, grupo_jueces_id AS "grupoJuecesId", cantidad_asignada AS "cantidadAsignada"`,
-          [ufId, request.body.grupoJuecesId, request.body.cantidadAsignada],
-        )
-        reply.code(201)
-        return rows[0]
-      } catch (err) {
-        if (esRechazoDeIntegridad(err)) {
-          return reply.code(400).send({ error: mensajeDeIntegridad(err) })
-        }
-        throw err
-      }
+      // Los rechazos de integridad (FK/UNIQUE/CHECK) los traduce el manejador central (http/errores-integridad.ts).
+      const { rows } = await pool.query(
+        `INSERT INTO unidad_funcional_grupo_jueces (unidad_funcional_id, grupo_jueces_id, cantidad_asignada)
+         VALUES ($1, $2, $3)
+         RETURNING id, grupo_jueces_id AS "grupoJuecesId", cantidad_asignada AS "cantidadAsignada"`,
+        [ufId, request.body.grupoJuecesId, request.body.cantidadAsignada],
+      )
+      reply.code(201)
+      return rows[0]
     },
   )
 
@@ -413,21 +419,14 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
       if (!(await verificarUF(orgId, ufId))) return reply.code(404).send({ error: 'No encontrado' })
       const asignacionId = idParam(request, 'asignacionId')
 
-      try {
-        const { rows } = await pool.query(
-          `UPDATE unidad_funcional_grupo_jueces SET cantidad_asignada = $3
-           WHERE id = $1 AND unidad_funcional_id = $2
-           RETURNING id, grupo_jueces_id AS "grupoJuecesId", cantidad_asignada AS "cantidadAsignada"`,
-          [asignacionId, ufId, request.body.cantidadAsignada],
-        )
-        if (rows.length === 0) return reply.code(404).send({ error: 'No encontrado' })
-        return rows[0]
-      } catch (err) {
-        if (esRechazoDeIntegridad(err)) {
-          return reply.code(400).send({ error: mensajeDeIntegridad(err) })
-        }
-        throw err
-      }
+      const { rows } = await pool.query(
+        `UPDATE unidad_funcional_grupo_jueces SET cantidad_asignada = $3
+         WHERE id = $1 AND unidad_funcional_id = $2
+         RETURNING id, grupo_jueces_id AS "grupoJuecesId", cantidad_asignada AS "cantidadAsignada"`,
+        [asignacionId, ufId, request.body.cantidadAsignada],
+      )
+      if (rows.length === 0) return reply.code(404).send({ error: 'No encontrado' })
+      return rows[0]
     },
   )
 
@@ -509,18 +508,43 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
 
       // FR-013: un preguntaCodigo desconocido debe rechazarse con un error
       // de cliente identificable — un INSERT con pregunta_id NULL violaría
-      // un NOT NULL (SQLSTATE 23502), no un trigger (P0001), así que no lo
-      // detectaría esRechazoDeTrigger (US3). Se valida antes de tocar nada.
+      // un NOT NULL (SQLSTATE 23502), no un trigger (P0001). Se valida antes
+      // de tocar nada.
       const codigosPreguntas = [...new Set(request.body.respuestas.map((r) => r.preguntaCodigo))]
       if (codigosPreguntas.length > 0) {
-        const { rows: existentes } = await pool.query<{ codigo: string }>(
-          'SELECT codigo FROM taxonomia_preguntas WHERE codigo = ANY($1)',
+        const { rows: existentes } = await pool.query<PreguntaTaxonomia>(
+          'SELECT id, codigo, texto, tipo_respuesta FROM taxonomia_preguntas WHERE codigo = ANY($1)',
           [codigosPreguntas],
         )
-        const encontrados = new Set(existentes.map((e) => e.codigo))
-        const desconocidos = codigosPreguntas.filter((c) => !encontrados.has(c))
+        const porCodigo = new Map(existentes.map((e) => [e.codigo, e]))
+        const desconocidos = codigosPreguntas.filter((c) => !porCodigo.has(c))
         if (desconocidos.length > 0) {
           return reply.code(400).send({ error: `Pregunta(s) inexistente(s): ${desconocidos.join(', ')}` })
+        }
+
+        // 007 (FR-026/027): una opción que no pertenece a la pregunta (o no existe) se rechaza acá, con la
+        // pregunta identificada, en vez de llegar al trigger como un opcion_id nulo. Solo para preguntas de
+        // opción; para el resto (numérica/texto) habla el trigger, que ya nombra la pregunta.
+        const { rows: opciones } = await pool.query<{ pregunta_id: number; codigo: string }>(
+          'SELECT pregunta_id, codigo FROM taxonomia_opciones WHERE pregunta_id = ANY($1)',
+          [existentes.map((e) => e.id)],
+        )
+        const opcionesPorPregunta = new Map<number, Set<string>>()
+        for (const o of opciones) {
+          if (!opcionesPorPregunta.has(o.pregunta_id)) opcionesPorPregunta.set(o.pregunta_id, new Set())
+          opcionesPorPregunta.get(o.pregunta_id)!.add(o.codigo)
+        }
+        for (const r of request.body.respuestas) {
+          const pregunta = porCodigo.get(r.preguntaCodigo)!
+          if (pregunta.tipo_respuesta !== 'opcion_unica' && pregunta.tipo_respuesta !== 'opcion_multiple') continue
+          for (const opcionCodigo of r.opcionesCodigos ?? []) {
+            if (!opcionesPorPregunta.get(pregunta.id)?.has(opcionCodigo)) {
+              throw new ErrorNegocio(400, `La opción «${opcionCodigo}» no existe para la pregunta ${rotuloPregunta(pregunta)}.`, {
+                preguntaCodigo: pregunta.codigo,
+                preguntaTexto: pregunta.texto,
+              })
+            }
+          }
         }
       }
 
@@ -557,11 +581,13 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
           }
         })
       } catch (err) {
-        // T009 (US3): un rechazo de trigger (FR-007/FR-006/FR-004/FR-008,
-        // y desde 0003 también Protección A) vuelve como 400 identificable,
-        // nunca 500 (D11). Cualquier otro error sigue siendo un 500 genuino.
-        if (esRechazoDeTrigger(err)) {
-          return reply.code(400).send({ error: err.message })
+        // 007 (FR-026/027): un rechazo de trigger de las respuestas (0004) trae en `detail` la pregunta afectada
+        // (`preguntaCodigo=<codigo>`). Se responde 400 con el mensaje legible y esa pregunta como dato separado.
+        // Sin `detail` (p. ej. organismo inexistente), lo resuelve el manejador central (P0001 → 400).
+        const codigo = /^preguntaCodigo=(.+)$/.exec((err as { detail?: string }).detail ?? '')?.[1]
+        if ((err as { code?: string }).code === 'P0001' && codigo) {
+          const { rows } = await pool.query<{ texto: string }>('SELECT texto FROM taxonomia_preguntas WHERE codigo = $1', [codigo])
+          throw new ErrorNegocio(400, (err as Error).message, { preguntaCodigo: codigo, preguntaTexto: rows[0]?.texto ?? codigo })
         }
         throw err
       }
@@ -640,19 +666,12 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
       const orgId = await autorizarPropietarioOAdmin(request, reply)
       if (orgId === null) return
 
-      try {
-        await pool.query('INSERT INTO organismo_editores (organismo_id, usuario_id) VALUES ($1, $2)', [
-          orgId,
-          request.body.usuarioId,
-        ])
-        reply.code(201)
-        return { usuarioId: request.body.usuarioId }
-      } catch (err) {
-        if (esRechazoDeIntegridad(err)) {
-          return reply.code(400).send({ error: mensajeDeIntegridad(err) })
-        }
-        throw err
-      }
+      await pool.query('INSERT INTO organismo_editores (organismo_id, usuario_id) VALUES ($1, $2)', [
+        orgId,
+        request.body.usuarioId,
+      ])
+      reply.code(201)
+      return { usuarioId: request.body.usuarioId }
     },
   )
 

@@ -332,4 +332,81 @@ describe('Contrato: taxonomía de organismos (GET/PUT)', () => {
     expect(conteoOrg311Despues).toBe(conteoOrg311Antes)
     expect(conteoOrg311Despues).toBe('9')
   })
+
+  // ------------------------- 007 US7: el rechazo identifica la pregunta (FR-026/FR-027, SC-010) --
+
+  describe('007 — rechazos identificables por una persona', () => {
+    // Nada de ids internos, nombres de tabla/columna ni referencias a requisitos.
+    const TECNICO = /pregunta_id|opcion_id|tipo_oficina_id|organismo_id|evaluaciones_taxonomicas|\bFR-\d|Protección|\b\d+\b/
+    const put = (orgId: number, respuestas: unknown[]) =>
+      app.inject({ method: 'PUT', url: `/api/organismos/${orgId}/taxonomia`, headers: { cookie: cookieAdmin }, payload: { respuestas } })
+    const identificado = (res: { statusCode: number; json: () => Record<string, string> }, codigo: string, texto: string, mensaje: string) => {
+      expect(res.statusCode).toBe(400)
+      const b = res.json()
+      expect(b.error).toBe(mensaje)
+      expect(b.preguntaCodigo).toBe(codigo)
+      expect(b.preguntaTexto).toBe(texto)
+      expect(b.error).not.toMatch(TECNICO)
+    }
+
+    it('pregunta que no aplica al tipo del organismo → mensaje con la pregunta + preguntaCodigo/preguntaTexto', async () => {
+      const creado = await app.inject({
+        method: 'POST', url: '/api/organismos', headers: { cookie: cookieAdmin },
+        payload: { denominacion: `${PREFIJO} unidad operativa 007`, denominacionSimplificadaId: 1, tipoOficinaId: 4, provinciaId: 1 },
+      })
+      const res = await put(creado.json().id, [{ preguntaCodigo: 'autonomia', opcionesCodigos: ['A'] }])
+      identificado(res, 'autonomia', 'autonomia', 'La pregunta «autonomia» no aplica al tipo de organismo actual.')
+    })
+
+    it('opción inexistente / ajena a la pregunta → nombra la opción y la pregunta, con el texto si difiere del código', async () => {
+      const res = await put(orgSinTaxonomiaId, [{ preguntaCodigo: codigoPreguntaMultiple, opcionesCodigos: ['ZZZ'] }])
+      identificado(
+        res,
+        codigoPreguntaMultiple,
+        'Pregunta de prueba (multiple)',
+        `La opción «ZZZ» no existe para la pregunta «${codigoPreguntaMultiple}» (Pregunta de prueba (multiple)).`,
+      )
+      // una opción REAL de otra pregunta ('X' es de la múltiple) tampoco pertenece a 'autonomia'
+      const ajena = await put(orgSinTaxonomiaId, [{ preguntaCodigo: 'autonomia', opcionesCodigos: ['X'] }])
+      identificado(ajena, 'autonomia', 'autonomia', 'La opción «X» no existe para la pregunta «autonomia».')
+    })
+
+    it('valor de un tipo que la pregunta no admite → identifica la pregunta y la regla', async () => {
+      const codigoNum = `${PREFIJO_PREGUNTA}_num_007`
+      await pool.query(`INSERT INTO taxonomia_preguntas (codigo, texto, grupo, tipo_respuesta, orden) VALUES ($1, $1, 'gestion', 'numerica', 503)`, [codigoNum])
+      await pool.query(`INSERT INTO taxonomia_pregunta_tipos_oficina (pregunta_id, tipo_oficina_id) SELECT id, 1 FROM taxonomia_preguntas WHERE codigo = $1`, [codigoNum])
+      identificado(
+        await put(orgSinTaxonomiaId, [{ preguntaCodigo: codigoNum, valorTexto: 'no es un número' }]),
+        codigoNum, codigoNum, `La pregunta «${codigoNum}» admite un valor numérico; se recibió un valor de otro tipo.`,
+      )
+      identificado(
+        await put(orgSinTaxonomiaId, [{ preguntaCodigo: 'autonomia', valorNumero: 5 }]),
+        'autonomia', 'autonomia', 'La pregunta «autonomia» admite una opción; se recibió un valor de otro tipo.',
+      )
+    })
+
+    it('dos respuestas a una pregunta de opción única → "admite una sola respuesta"', async () => {
+      const res = await put(orgSinTaxonomiaId, [{ preguntaCodigo: 'autonomia', opcionesCodigos: ['A', 'B'] }])
+      identificado(res, 'autonomia', 'autonomia', 'La pregunta «autonomia» admite una sola respuesta.')
+    })
+
+    it('varias respuestas inválidas en un mismo guardado: se identifica al menos la primera (US7-4) y no se guarda nada', async () => {
+      const antes = await app.inject({ method: 'GET', url: `/api/organismos/${orgSinTaxonomiaId}/taxonomia`, headers: { cookie: cookieAdmin } })
+      const res = await put(orgSinTaxonomiaId, [
+        { preguntaCodigo: 'autonomia', opcionesCodigos: ['ZZZ'] },
+        { preguntaCodigo: 'dependencia', opcionesCodigos: ['YYY'] },
+      ])
+      expect(res.statusCode).toBe(400)
+      expect(['autonomia', 'dependencia']).toContain(res.json().preguntaCodigo)
+      expect(res.json().error).not.toMatch(TECNICO)
+      const despues = await app.inject({ method: 'GET', url: `/api/organismos/${orgSinTaxonomiaId}/taxonomia`, headers: { cookie: cookieAdmin } })
+      expect(despues.json()).toEqual(antes.json())
+    })
+
+    it('una pregunta inexistente conserva el mensaje de 004 (sin preguntaCodigo)', async () => {
+      const res = await put(orgSinTaxonomiaId, [{ preguntaCodigo: 'no_existe_007', opcionesCodigos: ['A'] }])
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error).toBe('Pregunta(s) inexistente(s): no_existe_007')
+    })
+  })
 })

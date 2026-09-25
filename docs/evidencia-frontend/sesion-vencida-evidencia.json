@@ -1,0 +1,16 @@
+{
+  "mismaCuenta": {
+    "estados": [
+      401,
+      200
+    ],
+    "recargo": false,
+    "guardado": "test-frontend-borrador escrito a mano"
+  },
+  "otraCuenta": {
+    "urlFinal": "http://localhost:5173/organismos",
+    "listaDeB": "vacía",
+    "baseSinCambios": true
+  },
+  "fixturesRestantes": "0"
+}

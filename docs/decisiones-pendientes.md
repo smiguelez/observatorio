@@ -257,7 +257,7 @@ no como "hecho".
 
 ---
 
-**D11 — Endpoint de taxonomía roto por la migración de esquema de 003: RESUELTA (2026-09-23).**
+**D11 — Endpoint de taxonomía roto por la migración de esquema de 003 (2026-09-22).**
 
 `PUT /api/organismos/:orgId/taxonomia` (feature `002-backend-api-carga-datos`)
 falla con error de columna inexistente desde que se aplicó la migración
@@ -273,45 +273,251 @@ endpoint, desde su creación. El punto ciego es anterior a la feature 003;
 recién se hizo visible al verificar el Independent Test de US3 de esa
 feature.
 
-*No bloqueaba el cierre de `003`* (fuera de su alcance declarado: modelo de
-datos, no API) — bloqueaba cualquier uso real de la app antes del corte a
-producción.
-
-**Resolución (`004-fix-taxonomia-endpoint`)**: `GET`/`PUT
-/api/organismos/:orgId/taxonomia` reconstruidos contra el esquema real de
-`003` — `GET` agrupa por pregunta con texto/tipo incluidos; `PUT`
-reemplaza el conjunto completo atómicamente y traduce cualquier rechazo de
-trigger a un `400` identificable (nunca `500`). Cobertura de test agregada
-(`backend/tests/contract/taxonomia.test.ts`, 11 casos) — la ausencia que
-causó esta regresión ya no existe. De paso, la misma feature agregó dos
-protecciones de integridad relacionadas con el caso histórico de OGA
-Mediación (organismo id=311, hipótesis sin confirmar de
-`003-taxonomia-parametrizable`): un trigger nuevo (migración `0003`) que
-impide que una respuesta *nueva* se guarde para una pregunta que no aplica
-al tipo del organismo, y una verificación de aviso/confirmación en `PATCH
-/api/organismos/:id` antes de perder taxonomía por un cambio de tipo. El
-organismo id=311 en sí **no** fue tocado ni corregido retroactivamente —
-sigue con sus 9 respuestas históricas intactas, confirmado explícitamente
-en cada paso de la implementación.
+*No bloquea el cierre de `003`* (fuera de su alcance declarado: modelo de
+datos, no API) — **sí bloquea cualquier uso real de la app antes del corte
+a producción**, dado que no hay despliegue real afectado hoy (la app en
+producción sigue siendo la vieja, sin tocar). Se resuelve como parte del
+trabajo de backend sobre taxonomía (feature futura o fast-follow inmediato
+a continuación de 003), con su propio test — no se corrige dentro de 003.
 
 ---
 
-**D12 — `evaluaciones_taxonomicas_v1_legacy` queda como respaldo auditable, sin fecha de borrado (003-taxonomia-parametrizable, 2026-09-22).**
+**D13 — Casing inconsistente entre endpoints de backend (2026-09-23).**
 
-La migración `0001_taxonomia_parametrizable` renombra la tabla vieja de 9
-columnas (`evaluaciones_taxonomicas`) a `evaluaciones_taxonomicas_v1_legacy`
-en vez de borrarla — queda en `public.*` con sus 89 filas intactas,
-sin uso por ningún código de aplicación. Es una decisión deliberada
-(`research.md` de `003-taxonomia-parametrizable`, Decisión 4), no un olvido:
-la reconciliación automática de la migración valida *cantidad*
-(origen=destino=801), no necesariamente cada valor individual sin una
-auditoría manual adicional — conservar la tabla vieja un ciclo más permite
-esa auditoría sin depender de un backup externo, a un costo casi nulo (89
-filas).
+Al planificar `005-frontend-cliente`, se encontró que las respuestas de la
+API no usan una convención uniforme: `snake_case` en organismos, usuarios y
+pools (`002-backend-api-carga-datos`); `camelCase` en asignaciones,
+editores, fuero y taxonomía (`006-backend-endpoints-faltantes`). Cada
+feature se implementó sin mirar la convención de las anteriores.
 
-*Decisión pendiente, explícitamente fuera de esta feature:* cuándo (o si)
-borrar `evaluaciones_taxonomicas_v1_legacy`. No es una decisión de `003` —
-esa feature solo la crea y la deja disponible. Corresponde a una migración
-posterior, después de que exista suficiente confianza (auditoría manual,
-uso real en producción sin discrepancias reportadas) de que la migración a
-la tabla de respuestas parametrizable fue completa y correcta.
+**Decisión de Santi:** no tocar el backend — las cuatro features que
+introdujeron la inconsistencia ya están cerradas, testeadas, y en
+`reformulacion`. El frontend absorbe la diferencia con una capa de mapeo
+por recurso, normalizando cada respuesta a un solo casing interno del
+cliente.
+
+**Deuda registrada para el futuro:** el día que otro cliente distinto al
+frontend (por ejemplo, el "digesto" de IA del backlog) consuma esta misma
+API, va a tropezar con la misma inconsistencia. Si en algún momento se
+justifica una pasada de normalización sobre el backend, es una feature
+propia — no se resuelve de pasada dentro de ninguna otra.
+
+---
+
+**D14 — Alta de usuarios sin control administrativo: gap de seguridad activo, resuelto por diseño (2026-09-24).**
+
+Hoy cualquiera puede crear una cuenta por contraseña (ruta de Better Auth
+expuesta), Google, o magic link con cualquier email — no hay ningún
+control de "solo un admin crea usuarios" a nivel de backend, pese a que
+esa es la intención declarada del sistema (Santi, `005-frontend-cliente`).
+El frontend no ofrecer una pantalla de registro NO cierra esta puerta,
+porque la API sigue aceptando altas directas.
+
+**Decisión (opción 1, confirmada por Santi):** el intento de ingreso de un
+email no provisionado por un admin se **rechaza** — un hook de Better Auth
+(mismo mecanismo ya usado para fijar `auth.user.id`, `002-backend-api-carga-datos`
+Decisión 3) verifica si el email existe en `usuarios` antes de permitir la
+creación de identidad; si no existe, aborta con un mensaje claro. Se
+resuelve en `007`, antes que cambio de rol o fijar contraseña — es la
+primera prioridad de esa feature.
+
+**Descartada por ahora, no por inviable — a backlog (opción 2):** en vez
+de un simple rechazo, ofrecer un formulario de "solicitud de acceso"
+(email + provincia) que un admin revisa y aprueba. Evaluado como
+demasiado costoso para el volumen actual (47 usuarios en todo el
+sistema): requiere una tabla nueva, tres endpoints con su propia
+autorización, la primera pantalla **pública sin autenticación** de toda la
+app (con las preocupaciones de spam/rate-limiting que eso conlleva), y —
+el costo más grande — infraestructura real de envío de email para avisar
+la aprobación, que hoy no existe (ni siquiera el magic link envía correo
+real, solo lo loguea en consola). No se pierde nada por construir la
+opción 1 ahora: el chequeo de "¿está provisionado?" es el mismo en ambas,
+solo cambia qué pasa cuando la respuesta es no — la opción 2 puede
+agregarse después sin rehacer la 1.
+
+---
+
+**D15 — Datos reales de personas (email y nombre) comiteados en dos documentos de verificación (2026-09-24): PENDIENTE, requiere reescritura de historial.**
+
+Al revisar la evidencia de `005-frontend-cliente` antes de comitearla se encontró que dos documentos **ya
+comiteados y publicados** contienen datos reales de personas que debieron anonimizarse antes de comitear:
+
+| Archivo | Commit | Qué contiene |
+|---|---|---|
+| `docs/resultado-verificacion-identidad-20260918.md` | `21f8ac1` (US1–US5 de `001`) | un par de emails reales (línea de una tabla de usuarios, ~línea 55) |
+| `docs/resultado-verificacion-endpoints-faltantes-20260923.md` | `7057552` (`006`) | nombre y email reales de un usuario, y su id, en los ejemplos de respuesta de `editores` (~líneas 39–42) |
+
+**Alcance.** Ambos commits están en `origin` y en todas estas ramas remotas: el primero en
+`001-modelo-datos-relacional`, `002-backend-api-carga-datos`, `003-taxonomia-parametrizable`,
+`004-fix-endpoint-taxonomia`, `005-frontend-cliente`, `006-backend-endpoints-faltantes` y `reformulacion`; el
+segundo en `005-frontend-cliente`, `006-backend-endpoints-faltantes` y `reformulacion`. Borrar o editar los
+archivos en un commit nuevo **no** los saca del historial: seguirían accesibles en los commits anteriores para
+cualquiera con acceso al repositorio o a un clon/fork previo.
+
+**Decisión (Santi, 2026-09-24):** no se corrige de pasada. Sacar esos datos requiere **reescribir el historial**
+(`git filter-repo` o equivalente) y un `push --force` coordinado sobre todas las ramas afectadas, así que se
+hace en una **sesión dedicada**, no dentro de ninguna feature. Este registro solo deja constancia.
+
+**A considerar en esa sesión** (lista de trabajo, no decisiones tomadas):
+- confirmar el alcance completo con `git log -S` / `git grep` sobre **todo** el historial y **todas** las ramas
+  (incluida `main` y las `feature/*`/`fix/*` remotas), no solo estos dos archivos;
+- un aviso a quienes tengan clones: tras la reescritura tienen que volver a clonar o hacer `reset` de sus ramas;
+- decidir si en la reescritura se anonimizan los valores (conservando el resto del documento) o se quitan
+  los archivos;
+- revisar `src/App.jsx` (SPA original): contiene una dirección `@gmail.com` que **no** se evaluó acá (puede ser
+  configuración y no un dato personal; se decide en esa sesión);
+- verificar al final con `git grep` en todas las ramas que no quede ningún email ni nombre real.
+
+**Ya hecho / regla desde ahora.** La evidencia de `005` (capturas, fixtures de pruebas y `grabar-fixtures.mjs`)
+se anonimizó antes de comitear (ver `docs/resultado-verificacion-frontend-20260924.md`). Los documentos de
+verificación futuros registran datos **sintéticos o anonimizados** (`usuario-N@ejemplo.test`, "Organismo de
+ejemplo N") en lugar de copiar filas reales de la base.
+
+---
+
+**D16 — Errores de integridad sin capturar responden `500` en vez de `400` (hallazgo de `005` para `007`, 2026-09-24).**
+
+`006` ya tradujo a un `400` con mensaje los rechazos de `UNIQUE`/`CHECK`/`FK` de **asignaciones de jueces** y de
+**editores** (`esRechazoDeIntegridad` / `mensajeDeIntegridad` en `backend/src/http/trigger-error.ts`), pero solo en
+esas rutas. Al implementar el frontend se midió contra el backend real que **otras rutas con la misma clase de
+error siguen respondiendo `500`**:
+
+- `DELETE /api/pools-jueces/:id` de un pool con asignaciones: `500`, `code: "23503"`, constraint
+  `unidad_funcional_grupo_jueces_grupo_jueces_id_fkey` (la FK no tiene `ON DELETE` y la ruta no captura el error).
+- `POST /api/organismos/:orgId/unidades-funcionales` con una `localidadId` inexistente: `500`, `code: "23503"`,
+  constraint `unidades_funcionales_localidad_id_fkey`.
+
+Es la misma familia que D11 (un rechazo de la base que llega al cliente como `500` genérico). **No verificado**, pero
+probable por el mismo motivo: `POST`/`PATCH /api/organismos` con un `denominacionSimplificadaId`, `tipoOficinaId` o
+`provinciaId` inexistente, y `POST /api/pools-jueces` con una provincia inexistente.
+
+*Impacto en el frontend (mitigado, no resuelto):* el cliente solo ofrece localidades y pools reales, y traduce el
+`500` con `code 23503` del borrado de un pool a "No se pudo eliminar el pool: puede estar asignado a otras
+unidades funcionales" (`PoolEnUsoError`, `frontend/src/api/pools.ts`). Ese mensaje es una **inferencia del cliente**
+sobre un error genérico: si el backend devolviera un `400` con su propio texto no haría falta.
+
+*Propuesta para `007` (a decidir):* en vez de sumar `try/catch` ruta por ruta, un `setErrorHandler` de Fastify que
+mapee los SQLSTATE `23503`/`23505`/`23514`/`23502` a `400` con un mensaje por constraint (ampliando
+`MENSAJES_POR_CONSTRAINT`), dejando el `500` para lo verdaderamente inesperado; y decidir la semántica del borrado
+de un pool en uso (rechazar con `400` —lo esperado hoy— o `ON DELETE` explícito).
+
+---
+
+**D17 — Todo `bigint` se serializa como string, no solo los ids de usuario (hallazgo de `005` para `007`, 2026-09-24).**
+
+Ampliación de D13. Contra el backend real, **toda columna `bigint`** llega como **string** en el JSON —ids de
+organismo, unidad funcional, pool, asignación, localidad y usuario, y sus FK (`propietario_id`, `organismo_id`,
+`localidad_id`, `grupoJuecesId`, `usuarioId`)—, incluso en los recursos que usan camelCase (p. ej. asignaciones:
+`{"id":"627","grupoJuecesId":"747","cantidadAsignada":3}`); las `smallint`/`integer` llegan como number
+(`tipo_oficina_id`, `provincia_id`, `anio_implementacion`, `cantidadAsignada`). Es consecuencia del comportamiento
+por defecto de `pg` (el tipo `int8` se devuelve como string). Al mismo tiempo, los **cuerpos** de `POST`/`PATCH`
+exigen esos ids como número (`Type.Integer()`), así que un mismo id cambia de tipo según la dirección.
+
+*Resolución vigente (D13):* el backend no se toca; el frontend lo normaliza con un esquema zod por recurso
+(`frontend/src/api/ids.ts`, `idWire`) que convierte a `number` y falla con `ContratoInesperado` si el id no es un
+entero seguro. Cubierto por una suite de contrato con **19 respuestas reales grabadas**
+(`frontend/tests/unit/api/`, `scripts/grabar-fixtures.mjs`).
+
+*Para `007` (opcional, a decidir):* con ~47 usuarios y ids de orden de miles el riesgo de perder precisión es
+nulo hoy, así que serializar los `bigint` como número (parser de tipos de `pg` para `int8`) haría la API uniforme;
+tiene un límite (`Number.MAX_SAFE_INTEGER`) y es un cambio de contrato para cualquier otro consumidor, por lo que
+recién conviene si aparece un segundo cliente (D13, "deuda registrada"). Hasta entonces alcanza con documentar la
+regla.
+
+---
+
+**D18 — Los errores de los triggers de taxonomía nombran la pregunta por id interno: FR-009 de `005` solo se cumple en parte (2026-09-24).**
+
+`FR-009` (`005`) pide identificar qué pregunta de taxonomía tuvo el problema cuando el backend rechaza un
+guardado. Los mensajes de los triggers (`backend/migrations/0001`–`0003`, `RAISE EXCEPTION`) y el `400` del `PUT
+/api/organismos/:orgId/taxonomia` mezclan datos internos y **no incluyen el `codigo` de la pregunta**. Ejemplo
+real, capturado provocando la deriva de tipo entre la carga del formulario y el guardado:
+
+> `evaluaciones_taxonomicas: la pregunta 1 no aplica al tipo de organismo actual (tipo_oficina_id=3) del organismo 749 (Protección A)`
+
+El `1` es `taxonomia_preguntas.id`, que la API nunca expone (todo va por `codigo`, FR-005 de `004`). Solo el caso
+"Pregunta(s) inexistente(s): a, b" trae códigos. Además el mensaje muestra al usuario final nombres de tabla e ids
+internos.
+
+*Mitigación en el frontend (parcial):* validación local contra el catálogo del tipo (que evita casi todos estos
+rechazos antes de enviar), muestra siempre el mensaje completo del servidor junto al formulario, y resalta la
+pregunta **solo** cuando el mensaje contiene su código. No se puede resaltar la pregunta del ejemplo anterior.
+
+*Propuesta para `007`:* que el `400` de `PUT …/taxonomia` devuelva un cuerpo estructurado
+(`{ error, preguntaCodigo, opcionCodigo? }`) además del mensaje, y un texto legible para personas; hoy el cliente
+solo puede parsear texto libre.
+
+---
+
+**D19 — `taxonomia_preguntas.texto` es idéntico a `codigo` en las 9 preguntas migradas: no hay enunciado legible cargado (2026-09-24).**
+
+Verificado por SQL contra la base: en las 9 filas de `taxonomia_preguntas`, `texto = codigo`
+(`insercion_institucional`, `jerarquia_normativa`, `dependencia`, `asistencia_jurisdiccional`, `autonomia`,
+`alcance_proceso`, `alcance_fuero`, `presencia_territorial`, `grado_implementacion`); el campo `grupo` es también un
+identificador sin tildes (`institucional`, `organizacion`, `gestion`, `implementacion`). Las **opciones**
+(`taxonomia_opciones.etiqueta`) sí tienen texto real, en español y con tildes. Es un dato **sin cargar**, no un error
+de código: la migración `0001` sembró el código en ambos campos.
+
+*Impacto:* `FR-008` de `005` ("mostrar el texto real de cada pregunta, no su código interno") **no puede cumplirse
+con estos datos**. Contingencia del frontend (`etiquetaPregunta`, `etiquetaGrupo` en
+`frontend/src/features/taxonomia/mezclar.ts`): si `texto` es igual a `codigo` se muestra el código sin guiones
+bajos y con mayúscula inicial ("Insercion institucional", "Organizacion"), **sin tildes** —no se pueden inventar—.
+Cuando se carguen los enunciados reales el cliente los usa solo (la condición deja de cumplirse).
+
+*Pendiente (dato, no código):* cargar el enunciado real de cada pregunta y un rótulo legible por grupo, con una
+migración de datos nueva (las migraciones aplicadas no se editan — `backend/README.md`). La fuente de los
+enunciados no está confirmada en este repositorio; a definir por quien conoce el instrumento. Relacionado: las 9
+preguntas son todas de `opcion_unica`, así que los otros tres tipos de respuesta (múltiple, numérica, texto libre)
+no tienen ninguna pregunta real todavía y solo se probaron con un catálogo sintético.
+
+---
+
+**D20 — Un usuario puede autoasignarse cualquier provincia y con eso ganar acceso a los pools de esa provincia (hallazgo de `005` para `007`, 2026-09-24). PRIORIDAD ALTA: es un problema de autorización, no de UX.**
+
+**Qué pasa hoy** (verificado en el código de `002`, `reformulacion`):
+- `PATCH /api/usuarios/:id` (`backend/src/routes/usuarios.ts`) acepta `provinciaId` y lo autoriza con
+  `puedeEditarUsuario` (`authz/usuarios.ts`): **el propio usuario o un admin**. No hay ningún control sobre el
+  valor de `provinciaId`.
+- Ese campo **decide el acceso a los pools de jueces**: `resolverIdentidad` relee `provincia_id` de `usuarios` en
+  cada request, y `estaAutorizadoParaProvincia`/`puedeGestionarPool` (`authz/pools-jueces.ts`, vía
+  `mismaProvincia()`) autorizan según esa provincia. Con ella `GET /api/pools-jueces` lista los pools de esa
+  provincia y `POST/PATCH/DELETE` permiten crearlos, modificarlos y borrarlos.
+- Consecuencia: **cualquier usuario autenticado puede cambiarse a cualquier provincia y ganar, sin intervención
+  de un admin, lectura y escritura sobre los pools de esa provincia**, y volver a cambiarse a otra. (La
+  autorización de organismos/UF/taxonomía/editores va por propietario/editor/admin y **no** depende de este campo.)
+
+**Cómo se relaciona con la app vieja (matiz importante).**
+- En la **interfaz** vieja, la provincia la asignaba un admin: `CrearOrganismoForm.jsx` muestra "No podés crear
+  organismos todavía: no tenés una provincia asignada. Un administrador tiene que asignarte una provincia…". La app
+  nueva (`005`) permite lo contrario: el perfil deja elegir la provincia (verificado en el recorrido de SC-002).
+- En la **capa de autorización** vieja no había diferencia: las reglas de Firestore
+  (`docs/firestore-rules-actuales.rules`, `match /users/{userId}`) permitían `write: if request.auth.token.email
+  == userId || esAdmin()`, es decir, cada usuario podía escribir su propio documento —incluida `provincia`, y
+  también `rol`—. `002` portó esa regla (Principio VI) y **cerró la parte de `rol`** (el `PATCH` no acepta rol),
+  pero dejó abierta la de `provincia`. Es decir: no es una regresión respecto de las reglas viejas, sino una
+  debilidad heredada que la UI vieja ocultaba y la app nueva expone.
+
+**Decisión (Santi, 2026-09-24):** se resuelve en `007`, **restringiendo la escritura de `provinciaId` a admin
+únicamente**, con el mismo criterio que `propietario_id` en organismos (el servidor no confía en lo que manda el
+cliente). No bloquea `005` ni `006` porque todavía no hay usuarios reales expuestos, pero es **de mayor prioridad
+que las otras deudas de `007`** por su naturaleza de autorización.
+
+**A definir en `007` (detalles de la corrección, no de la decisión):**
+- qué hace el servidor con `provinciaId` de un no admin: **rechazar con `403`** (visible) o **ignorarlo en
+  silencio** (como `propietario_id`). Se sugiere `403`: ignorarlo dejaría a la UI mostrando "cambios guardados" sin
+  que cambie nada;
+- cómo asigna la provincia un admin: hoy la pantalla de usuarios de `005` es de solo lectura (US9, decisión 1);
+  hace falta que el admin pueda editar la provincia de un usuario (backend ya lo permite; falta la UI);
+- cuál es el estado de un usuario recién creado (por Google o enlace, D14): sin provincia hasta que un admin la
+  asigne; quién avisa al admin (relacionado con D14 y el ítem 9 del backlog);
+- revisar si `foto_url` y `nombre_display` merecen algún control (hoy editables por el propio usuario, sin
+  impacto de autorización).
+
+**Cambios de frontend que implica** (a hacer junto con `007`): el selector de provincia de `/perfil` pasa a solo
+lectura para `usuario_normal`; el mensaje del alta sin provincia deja de decir "completá tu provincia en tu
+perfil" y pasa a "pedile a un administrador que te asigne una provincia"; y el recorrido de SC-002
+(`recorrido-sc002.spec.ts`) cambia, porque un usuario nuevo ya no podrá completar el alta por sí solo.
+
+**Mientras tanto**, el frontend ya trata la provincia como UX, no como control de acceso (Principio II), y así
+está dicho en `docs/resultado-verificacion-frontend-20260924.md`; pero eso no protege los pools: la barrera real
+es la del backend.

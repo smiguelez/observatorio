@@ -1,0 +1,19 @@
+{
+  "editorVeElOrganismo": true,
+  "editorIntentaGestionar": {
+    "post": 403,
+    "delete": 403
+  },
+  "duplicado": {
+    "status": [
+      400
+    ],
+    "mensaje": "Ese usuario ya es editor de este organismo."
+  },
+  "editorQuitado": {
+    "statusDelBackend": [
+      403
+    ]
+  },
+  "fixturesRestantes": "0"
+}

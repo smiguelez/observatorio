@@ -1,0 +1,24 @@
+{
+  "poolsCreadosEnElDialogo": 2,
+  "asignaciones": "test-frontend-pool A:10 | test-frontend-pool B:3",
+  "asignacionesTrasExclusivo": "test-frontend-pool A:10 | test-frontend-pool B:3 | Grupo exclusivo de test-frontend-uf 1:4 | test-frontend-pool C:5",
+  "duplicado": {
+    "statusPost": [
+      400
+    ],
+    "mensaje": "Ya existe una asignación de esta unidad funcional a ese pool."
+  },
+  "borradoPoolEnUso": {
+    "respuestaDelBackend": [
+      {
+        "status": 500,
+        "cuerpo": "{\"statusCode\":500,\"code\":\"23503\",\"error\":\"Internal Server Error\",\"message\":\"update or delete on table \\\"grupos_jueces\\\" violates foreign key constraint \\\"unidad_funcional_grupo_jueces_grupo_jueces_id_fkey\\\" on table \\\"un"
+      }
+    ],
+    "mensajeEnPantalla": "No se pudo eliminar el pool: puede estar asignado a otras unidades funcionales."
+  },
+  "fixturesRestantes": {
+    "usuarios": "0",
+    "pools": "0"
+  }
+}

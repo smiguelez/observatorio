@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "nombre": "penal"
+  },
+  {
+    "id": 2,
+    "nombre": "civil"
+  },
+  {
+    "id": 3,
+    "nombre": "familia"
+  },
+  {
+    "id": 4,
+    "nombre": "laboral"
+  }
+]

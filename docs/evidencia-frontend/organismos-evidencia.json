@@ -1,0 +1,24 @@
+{
+  "provinciaPrellenada": "Buenos Aires",
+  "navegacionesDeDocumento": 0,
+  "altaNormal": {
+    "filas": 1
+  },
+  "provinciaAdmin": {
+    "antes": "1",
+    "despues": "2"
+  },
+  "ajeno": {
+    "organismo": "744",
+    "statusDelBackend": [
+      403
+    ]
+  },
+  "proteccionB": {
+    "pregunta": "insercion_institucional",
+    "tipoAntes": "1",
+    "tipoDespues": "3",
+    "respuestasDespues": "0"
+  },
+  "fixturesRestantes": "0"
+}

@@ -4,7 +4,7 @@
 
 **Created**: 2026-09-23
 
-**Status**: Draft
+**Status**: Draft (actualizado 2026-09-24 con las decisiones de la sesión de clarificación)
 
 **Input**: User description: "Especificá el frontend del observatorio — el cliente que consume el backend ya construido (002-backend-api-carga-datos, 003-taxonomia-parametrizable, 004-fix-taxonomia-endpoint), reemplazando la SPA actual (React/Firebase, src/) sin reutilizar su código. Stack: Vite + React + TypeScript + Tailwind CSS + shadcn/ui. No es una traducción 1:1 de la app actual — incluye tres ajustes deliberados: login con los tres métodos ya construidos; taxonomía como formulario dinámico a partir de GET /api/organismos/:orgId/taxonomia; jerarquía de menús diseñada por criterio de UX, con perfil de usuario y ajustes. Pantallas de usuario_normal: lista de organismos, alta de organismo (datos + fuero + provincia solo lectura), CRUD de UF (incluida asignación de jueces por pool/exclusivo/subconjunto de D8), formulario dinámico de taxonomía, tableros DataStudio (link externo), perfil propio, ajustes. Pantallas de admin: todo lo anterior, más gestión de organismos (checklist de completitud, exportar a PDF), asignación de editores por organismo, gestión de usuarios. Fuera de alcance: ítems del backlog de expectativas-nueva-app.md."
 
@@ -20,54 +20,22 @@ reemplazando la app actual sin portar su código (Principio XI: la app
 actual es fuente de requisitos funcionales, no base a traducir línea por
 línea).
 
-**Hallazgo relevante para el alcance (verificado contra el backend real
-antes de escribir este documento, no asumido — Principio VII)**: varias de
-las pantallas pedidas necesitan datos que el backend actual **no expone
-por ningún endpoint todavía**:
+**Hallazgo original, ya resuelto (verificado contra el backend real, Principio VII)**:
+al especificar esta feature se comprobó que las pantallas pedidas
+necesitaban datos sin ningún endpoint — catálogos de referencia
+(provincias, denominaciones simplificadas, tipos de oficina, tipos de UF,
+fueros), fuero de un organismo, asignación de jueces por UF (D8), gestión de
+editores de organismo, y el catálogo completo de preguntas de taxonomía (el
+endpoint de `004` devuelve solo las ya respondidas). Esos cinco grupos los
+construyó `006-backend-endpoints-faltantes`, ya mergeada, así que **dejaron
+de ser una dependencia abierta de esta feature**.
 
-- **Catálogos de referencia** (`provincias`, `denominaciones_simplificadas`,
-  `tipos_oficina`, `tipos_uf`, `fueros`): existen como tablas con FK real
-  desde `organismos`/`unidades_funcionales`, pero ninguna tiene una ruta
-  `GET`. Sin esto, ningún formulario de alta/edición puede mostrar un
-  combo con las opciones válidas — ni "alta de organismo" ni "alta de UF"
-  son construibles hoy tal como están pedidas.
-- **Fuero de un organismo** (`organismo_fueros`, y la vista calculada
-  `vista_fuero_simplificado` de `001-modelo-datos-relacional`): sin
-  exposición por API. La pantalla de alta de organismo pide mostrar el
-  fuero (solo lectura) — hoy no hay de dónde leerlo.
-- **Asignación de jueces por UF** (`unidad_funcional_grupo_jueces`, el
-  modelo confirmado en D8 —
-  `docs/decisiones-pendientes.md`): la tabla existe, con
-  `cantidad_asignada` por par (UF, pool), pero no tiene ningún endpoint,
-  ni de lectura ni de escritura. Es exactamente la funcionalidad que esta
-  spec pide para el CRUD de UF ("asignación de jueces por
-  pool/exclusivo/subconjunto de D8") — hoy no es implementable contra el
-  backend tal cual existe.
-- **Editores de un organismo** (`organismo_editores`): se lee
-  internamente para resolver autorización (`GET /api/organismos`), pero no
-  hay ningún endpoint para gestionarlo (verlo explícitamente, agregar o
-  quitar un editor) — necesario para la pantalla de admin "asignación de
-  editores por organismo".
-- **Catálogo completo de preguntas de taxonomía**: el pedido de esta spec
-  describe el formulario dinámico como construido "a partir de lo que
-  devuelve `GET /api/organismos/:orgId/taxonomia`" — pero ese endpoint,
-  por diseño explícito de `004-fix-taxonomia-endpoint` (su spec.md,
-  Assumptions: *"'Devolver todas las respuestas del organismo' significa
-  las respuestas que existen hoy... no una lista de todas las preguntas
-  del catálogo con huecos para las no respondidas"*), devuelve **solo las
-  preguntas ya respondidas**, agrupadas — no la lista completa de
-  preguntas aplicables al tipo del organismo. Un formulario que además
-  deje *completar* preguntas sin responder todavía (no solo ver/editar las
-  ya respondidas) necesita conocer el catálogo completo de
-  `taxonomia_preguntas` (con su `tipo_respuesta` y las `taxonomia_opciones`
-  de cada una) filtrado por tipo de organismo — dato que hoy tampoco tiene
-  ningún endpoint propio.
-
-Ninguno de estos gaps es una decisión de esta feature — son ausencias
-reales y verificadas del backend ya construido. Ver **Assumptions** para
-cómo se resuelve esto en el alcance de esta spec (no se expande el alcance
-de "frontend" para incluir construir estos endpoints; se documentan como
-dependencia explícita).
+**Brechas que sí siguen abiertas (verificadas al planificar, contra el
+código real)**: el backend no ofrece (a) ningún modo de cambiar el rol de un
+usuario, (b) ningún modo de fijar desde el cliente una contraseña nueva, ni
+(c) ningún modo de que un admin cree usuarios. Las tres se difieren a una
+feature de backend posterior (`007`) — ver Clarifications y Assumptions.
+Esta feature no modifica el backend.
 
 **Fuera de alcance explícito** (`docs/expectativas-nueva-app.md`; la
 correspondencia exacta de ítems se corrigió acá porque la numeración
@@ -89,9 +57,24 @@ ver Assumptions):
 - Cualquier lógica de reporting/BI — los tableros de DataStudio se
   integran como link externo, esta feature no construye ni modifica
   ningún dashboard.
-- Cualquier cambio al backend (`002`/`003`/`004`) o al modelo de datos —
-  incluidos los gaps documentados arriba, que son dependencia, no alcance,
-  de esta feature.
+- Cambiar el rol de un usuario, fijar una contraseña nueva desde el
+  cliente, y crear usuarios desde la app — los tres requieren backend nuevo
+  y se difieren a la feature `007`.
+- Cualquier cambio al backend (`002`/`003`/`004`/`006`) o al modelo de
+  datos — las brechas anteriores son dependencia de `007`, no alcance de
+  esta feature.
+
+## Clarifications
+
+### Session 2026-09-24
+
+- Q: ¿US9 puede cambiar el rol de un usuario? → A: No. **Gestión de usuarios queda en solo lectura** hasta una feature `007` de backend; el backend no ofrece hoy ningún modo de cambiar roles.
+- Q: ¿El login por contraseña distingue una contraseña revocada de una incorrecta? → A: No. **Todo fallo de login por contraseña muestra el mismo mensaje genérico.** Es una decisión de seguridad deliberada (no revelar si una cuenta existe o qué credenciales tiene), no una limitación a corregir.
+- Q: ¿Se puede fijar una contraseña nueva desde el cliente? → A: No en esta feature; **diferido a `007`**.
+- Q: ¿Dónde se gestionan los pools de jueces? → A: **Únicamente dentro del diálogo de asignación de jueces de una UF**. No hay sección de menú ni pantalla propia de pools.
+- Q: ¿Hay registro público con contraseña? → A: No. **No existe pantalla de registro**; el alta de usuarios es responsabilidad exclusiva de un admin (ver Assumptions: la pantalla de alta requiere `007`).
+- Q: ¿Quién puede editar la provincia de un organismo? → A: **El admin puede editarla; para `usuario_normal` es fija** (prellenada con la provincia de su perfil, sin control para cambiarla).
+- Q: ¿Un organismo cuyo tipo no tiene preguntas de taxonomía aplicables está completo? → A: **Sí**: cuenta como taxonomía completa, sin nada pendiente.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -108,7 +91,8 @@ explícitamente, no una traducción de lo que ya existe.
 
 **Independent Test**: completar un inicio de sesión exitoso por cada uno
 de los tres métodos por separado, y confirmar que las tres formas de
-entrar llevan al mismo usuario a la misma sesión autenticada.
+entrar llevan al mismo usuario a la misma sesión autenticada; y comprobar
+que un intento fallido por contraseña muestra siempre el mismo mensaje.
 
 **Acceptance Scenarios**:
 
@@ -121,13 +105,15 @@ entrar llevan al mismo usuario a la misma sesión autenticada.
 3. **Given** un usuario que pide un magic link a su email, **When** hace
    clic en el enlace recibido, **Then** queda autenticado sin haber
    ingresado ninguna contraseña.
-4. **Given** un usuario que ya iba a entrar con contraseña, pero verificó
-   antes su email por magic link, **When** intenta loguearse con la
-   contraseña que tenía, **Then** ve un mensaje que explica que su
-   contraseña fue invalidada por seguridad al verificar el email por otro
-   método, con una forma clara de fijar una contraseña nueva (backlog,
-   ítem 1 — resuelto acá, no es funcionalidad nueva sino la consecuencia
-   de un comportamiento de seguridad ya construido en el backend).
+4. **Given** cualquier intento de login por contraseña que falla (contraseña
+   incorrecta, cuenta inexistente, o contraseña invalidada por el backend
+   al verificarse el email por otro método), **When** el usuario envía el
+   formulario, **Then** ve **siempre el mismo mensaje genérico** ("email o
+   contraseña incorrectos") que no revela cuál fue la causa, junto a un
+   acceso visible a los otros dos métodos de ingreso (Google, enlace por
+   email). Backlog ítem 1 (aviso de revocación): resuelto en la dirección
+   opuesta a la prevista — por seguridad no se avisa que la contraseña fue
+   invalidada; se ofrece el camino alternativo de ingreso.
 
 ---
 
@@ -151,10 +137,18 @@ inmediatamente después.
    editor, **When** entra a la lista de organismos, **Then** ve
    exactamente esos organismos, no otros.
 2. **Given** un usuario en la pantalla de alta de organismo, **When**
-   completa denominación, denominación simplificada, tipo de oficina y
-   provincia y confirma, **Then** el organismo queda creado con él como
-   propietario (el servidor lo fuerza así, sin importar qué mande el
-   formulario — FR-013 de `002`).
+   completa denominación, denominación simplificada y tipo de oficina, y
+   confirma, **Then** el organismo queda creado con él como propietario (el
+   servidor lo fuerza así, sin importar qué mande el formulario — FR-013 de
+   `002`). La provincia viene prellenada con la de su perfil y **no es
+   editable** para un `usuario_normal`.
+4. **Given** un admin en la pantalla de alta o de edición de un organismo,
+   **When** cambia la provincia, **Then** el cambio se acepta y se guarda
+   (solo el admin tiene ese control).
+5. **Given** un `usuario_normal` cuyo perfil no tiene provincia cargada,
+   **When** intenta dar de alta un organismo, **Then** ve un mensaje que
+   explica que primero debe completar su provincia en el perfil, en vez de
+   un formulario que no puede enviarse.
 3. **Given** un organismo recién creado, **When** el usuario lo abre,
    **Then** ve su fuero mostrado en modo solo lectura (no hay forma de
    editarlo desde acá).
@@ -190,7 +184,11 @@ confirmar que la respuesta se guarda.
 3. **Given** una pregunta de tipo opción múltiple, **When** el usuario
    marca más de una opción, **Then** todas quedan guardadas como
    respuesta de esa pregunta.
-4. **Given** un conjunto de respuestas que el usuario intenta guardar
+4. **Given** un organismo cuyo tipo no tiene ninguna pregunta de taxonomía
+   aplicable, **When** el usuario abre su taxonomía, **Then** ve un mensaje
+   explícito de que ese tipo de organismo no tiene taxonomía, no un
+   formulario vacío.
+5. **Given** un conjunto de respuestas que el usuario intenta guardar
    viola una regla de integridad del backend, **When** confirma el
    formulario, **Then** ve un mensaje de error claro identificando qué
    pregunta tiene el problema — no un error genérico.
@@ -203,7 +201,8 @@ Como usuario, quiero dar de alta, editar y eliminar las unidades
 funcionales de mis organismos, y asignarles la cantidad de jueces a la que
 asisten — ya sea un grupo exclusivo, un pool compartido completo, o un
 subconjunto de un pool — para que la carga de UF refleje cómo funciona en
-la práctica (D8).
+la práctica (D8). Los pools se crean y gestionan **desde el propio diálogo
+de asignación de jueces** de la UF; no existe otra pantalla para ellos.
 
 **Why this priority**: es funcionalidad central del relevamiento, pero
 depende de que la lista de organismos (US2) ya exista.
@@ -228,6 +227,10 @@ agregada por pool.
    solo 3 de esos 10 (subconjunto, D8 caso 5), **Then** la asignación de 3
    queda guardada, sin que el sistema exija identificar cuáles jueces
    puntuales son.
+5. **Given** el diálogo de asignación de jueces de una UF, **When** el
+   usuario necesita un pool que todavía no existe (por ejemplo, un grupo
+   exclusivo de esa UF), **Then** puede crearlo, y también editar o
+   eliminar los pools de su provincia, sin salir del diálogo.
 
 ---
 
@@ -257,14 +260,17 @@ uno, sin necesidad de conocer de antemano dónde están.
 3. **Given** un usuario que quiere ver los tableros de reporting, **When**
    hace clic en el acceso correspondiente, **Then** se abre el tablero de
    DataStudio (enlace externo) — esta app no reconstruye ningún reporte.
+4. **Given** cualquier usuario, **When** recorre el menú principal,
+   **Then** no encuentra una sección propia de pools de jueces — se
+   gestionan únicamente desde la asignación de jueces de una UF.
 
 ---
 
 ### User Story 6 - Editar los propios datos y gestionar los métodos de inicio de sesión desde el perfil (Priority: P2)
 
 Como usuario, quiero poder editar mis propios datos, cambiar mi
-contraseña, y ver/gestionar qué métodos de login tengo vinculados a mi
-cuenta, desde una pantalla de perfil dedicada — que hoy no existe.
+contraseña (si ya tengo una), y ver qué métodos de login tengo vinculados a
+mi cuenta, desde una pantalla de perfil dedicada — que hoy no existe.
 
 **Why this priority**: es parte del mismo ajuste deliberado de menús
 (perfil de usuario) — sin esto, ese menú nuevo estaría vacío.
@@ -277,8 +283,14 @@ siguiente la usa.
 
 1. **Given** un usuario en su pantalla de perfil, **When** edita un dato
    propio y guarda, **Then** el cambio se refleja de inmediato.
-2. **Given** un usuario con contraseña, **When** la cambia desde el
-   perfil, **Then** el próximo login exige la contraseña nueva.
+2. **Given** un usuario que ya tiene contraseña, **When** la cambia desde
+   el perfil (informando la actual), **Then** el próximo login exige la
+   contraseña nueva.
+4. **Given** un usuario que no tiene contraseña (entra solo por Google o
+   enlace por email), **When** abre su perfil, **Then** no ve un
+   formulario de cambio de contraseña sino una indicación de que ese método
+   no está activo en su cuenta; fijar una contraseña nueva queda diferido a
+   `007`.
 3. **Given** un usuario con más de un método de login vinculado, **When**
    entra a la sección de métodos de acceso, **Then** ve cuáles tiene
    activos.
@@ -297,13 +309,16 @@ cargado (US2-US4) para tener algo que evaluar.
 
 **Independent Test**: abrir la vista de gestión de organismos como admin,
 confirmar que un organismo con todo cargado se distingue claramente de uno
-incompleto, y exportar esa vista a un PDF legible.
+incompleto, que un organismo cuyo tipo no admite taxonomía figura con la
+taxonomía completa, y exportar esa vista a un PDF legible.
 
 **Acceptance Scenarios**:
 
 1. **Given** un admin en la vista de gestión de organismos, **When** la
    abre, **Then** ve, por organismo, qué partes están completas (datos
-   básicos, al menos una UF, taxonomía respondida) y cuáles no.
+   básicos, al menos una UF, taxonomía completa) y cuáles no. Un
+   organismo cuyo tipo no tiene preguntas de taxonomía aplicables cuenta la
+   taxonomía como completa.
 2. **Given** esa misma vista, **When** el admin exporta, **Then** obtiene
    un archivo PDF con la misma información mostrada en pantalla.
 
@@ -332,25 +347,32 @@ quitarlo y confirmar que pierde el acceso.
 
 ---
 
-### User Story 9 - (admin) Gestionar usuarios (Priority: P3)
+### User Story 9 - (admin) Consultar los usuarios del sistema (Priority: P3)
 
-Como administrador, quiero ver la lista de usuarios del sistema y poder
-cambiar su rol, para administrar quién tiene permisos de admin.
+Como administrador, quiero ver la lista de usuarios del sistema con su
+perfil y sus roles, para saber quién tiene permisos de admin. **Solo
+lectura**: cambiar el rol de un usuario, o crear usuarios, requiere backend
+nuevo y queda diferido a la feature `007`.
 
 **Why this priority**: operación de administración de más baja frecuencia
-que el resto.
+que el resto, y hoy limitada por lo que el backend permite.
 
-**Independent Test**: como admin, cambiar el rol de un usuario y confirmar
-que el cambio se refleja en lo que ese usuario puede hacer.
+**Independent Test**: como admin, abrir la lista de usuarios y confirmar
+que muestra email, rol y provincia de cada uno, y que no hay ningún
+control activo para modificar roles.
 
 **Acceptance Scenarios**:
 
-1. **Given** un admin en la gestión de usuarios, **When** ve la lista,
-   **Then** puede ver el perfil completo de cualquier usuario (email, rol,
+1. **Given** un admin en la pantalla de usuarios, **When** ve la lista,
+   **Then** puede ver el perfil de cualquier usuario (email, roles,
    provincia).
-2. **Given** un usuario sin rol admin, **When** el admin le otorga el rol,
-   **Then** ese usuario pasa a tener acceso de administrador la próxima
-   vez que use la app.
+2. **Given** esa misma pantalla, **When** el admin busca cómo cambiar el
+   rol de un usuario, **Then** ve el control deshabilitado con una
+   explicación de que esa función todavía no está disponible — no un
+   control que falle al usarlo, ni ausente sin explicación.
+3. **Given** un usuario sin rol admin, **When** intenta abrir la pantalla
+   de usuarios por URL directa, **Then** recibe la misma respuesta que ante
+   una pantalla inexistente (FR-016).
 
 ---
 
@@ -385,10 +407,12 @@ que el cambio se refleja en lo que ese usuario puede hacer.
   Google, y por magic link, usando los tres métodos ya construidos en el
   backend — ninguno MUST ser un prerequisito para poder usar los otros
   dos.
-- **FR-002**: El sistema MUST mostrar un mensaje explicativo, no un error
-  genérico, cuando un intento de login por contraseña falla porque esa
-  credencial fue invalidada automáticamente por el backend al verificarse
-  el email por otro método.
+- **FR-002**: El sistema MUST mostrar **el mismo mensaje genérico** ante
+  cualquier fallo de login por contraseña, sin distinguir contraseña
+  incorrecta, cuenta inexistente o contraseña invalidada — decisión de
+  seguridad deliberada (no revelar la existencia ni el estado de una
+  cuenta). El mensaje MUST ofrecer acceso a los otros dos métodos de
+  ingreso.
 - **FR-003**: El sistema MUST mostrar, a cualquier usuario autenticado,
   únicamente los organismos de los que es propietario o editor — todos,
   sin excepción, si el usuario es admin.
@@ -396,7 +420,10 @@ que el cambio se refleja en lo que ese usuario puede hacer.
   datos básicos (denominación, denominación simplificada, tipo de
   oficina, provincia), sin exponer nunca un campo editable de
   "propietario" — el backend ya lo fuerza al usuario que crea, el
-  formulario MUST NOT sugerir que es un dato que se puede elegir.
+  formulario MUST NOT sugerir que es un dato que se puede elegir. La
+  provincia MUST ser fija (la del perfil del usuario, sin control para
+  cambiarla) para un `usuario_normal`, y editable para un admin, tanto en
+  el alta como en la edición.
 - **FR-005**: El sistema MUST mostrar el fuero de un organismo en modo
   exclusivamente de lectura — ninguna pantalla MUST ofrecer una forma de
   editarlo.
@@ -425,10 +452,13 @@ que el cambio se refleja en lo que ese usuario puede hacer.
 - **FR-013**: El sistema MUST proveer una navegación agrupada por
   secciones de uso, distinta de una lista plana de enlaces, con al menos
   un menú de perfil de usuario y un menú de ajustes de la aplicación —
-  ninguno de los dos existente en la app actual.
+  ninguno de los dos existente en la app actual. La navegación MUST NOT
+  incluir una sección propia de pools de jueces.
 - **FR-014**: El sistema MUST permitir al usuario editar sus propios
-  datos, cambiar su contraseña, y ver qué métodos de login tiene
-  vinculados, desde su perfil.
+  datos, ver qué métodos de login tiene vinculados, y — si ya tiene una
+  contraseña — cambiarla informando la actual, desde su perfil. Fijar una
+  contraseña nueva a quien no tiene ninguna MUST NOT ofrecerse en esta
+  feature (diferido a `007`).
 - **FR-015**: El sistema MUST proveer un acceso directo a los tableros de
   reporting de DataStudio como enlace externo — esta app MUST NOT
   reconstruir ningún reporte ni dashboard propio.
@@ -440,11 +470,15 @@ que el cambio se refleja en lo que ese usuario puede hacer.
 - **FR-017**: El sistema MUST mostrar, en la vista de gestión de
   organismos (admin), el estado de completitud de cada organismo (datos
   básicos, unidades funcionales, taxonomía), y MUST permitir exportar esa
-  vista a un archivo descargable.
+  vista a un archivo descargable. Un organismo cuyo tipo no tiene
+  preguntas de taxonomía aplicables MUST contar la taxonomía como
+  completa.
 - **FR-018**: El sistema MUST permitir a un admin agregar y quitar
   editores de cualquier organismo.
 - **FR-019**: El sistema MUST permitir a un admin ver la lista completa de
-  usuarios y cambiar el rol de cualquiera de ellos.
+  usuarios con su email, roles y provincia. El control para cambiar el rol
+  de un usuario MUST mostrarse deshabilitado con una explicación, sin
+  ofrecer ninguna acción que falle (cambio de rol diferido a `007`).
 - **FR-020**: El sistema MUST redirigir a la pantalla de login a
   cualquier usuario sin sesión válida que intente acceder a cualquier otra
   pantalla, sin exponer datos antes de esa redirección.
@@ -452,6 +486,16 @@ que el cambio se refleja en lo que ese usuario puede hacer.
   "no autorizado", a un usuario que intenta ver o editar un organismo,
   unidad funcional, o taxonomía que no le pertenece y del que no es
   editor ni admin — nunca una pantalla vacía o degradada en silencio.
+- **FR-022**: El sistema MUST NOT ofrecer ninguna pantalla de registro
+  público con contraseña; ninguna pantalla de la app permite a un visitante
+  sin cuenta crearse una.
+- **FR-023**: El sistema MUST mostrar un mensaje explícito, no un
+  formulario vacío, cuando el tipo de un organismo no tiene ninguna
+  pregunta de taxonomía aplicable.
+- **FR-024**: El sistema MUST permitir crear, editar y eliminar pools de
+  jueces **únicamente desde el diálogo de asignación de jueces** de una
+  unidad funcional; MUST NOT existir una sección de menú ni una pantalla
+  independiente de pools.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -463,9 +507,8 @@ que el cambio se refleja en lo que ese usuario puede hacer.
   permite editarlas dentro de lo que el backend ya expone.
 - **Catálogos de referencia** (provincias, tipos de oficina, tipos de UF,
   denominaciones simplificadas, fueros, pools de jueces): datos de
-  selección para los formularios — ya existen como tablas, su exposición
-  por API es una dependencia de esta feature, no algo que ella modele
-  (ver Contexto y Assumptions).
+  selección para los formularios — ya existen y `006` los expone por API;
+  esta feature solo los consume.
 
 ## Success Criteria *(mandatory)*
 
@@ -492,21 +535,38 @@ que el cambio se refleja en lo que ese usuario puede hacer.
   directa de una pantalla de la app actual — verificado contra los tres
   ajustes deliberados (login de 3 métodos, taxonomía dinámica, menús por
   UX) más las dos pantallas explícitamente nuevas (perfil, ajustes).
+- **SC-008**: El 100% de los intentos fallidos de login por contraseña
+  muestran exactamente el mismo mensaje, sin importar la causa.
+- **SC-009**: Un usuario encuentra cómo crear un pool nuevo sin salir de la
+  pantalla de asignación de jueces, y 0 pantallas o ítems de menú ofrecen
+  gestionar pools por fuera de ella.
 
 ## Assumptions
 
-- **Dependencia de backend no resuelta por esta feature**: los catálogos
-  de referencia (`provincias`, `denominaciones_simplificadas`,
-  `tipos_oficina`, `tipos_uf`, `fueros`), la asignación UF↔jueces
-  (`unidad_funcional_grupo_jueces`, D8), la gestión de editores
-  (`organismo_editores`), y el catálogo completo de preguntas de
-  taxonomía (no solo las respondidas) no tienen ningún endpoint hoy —
-  verificado contra el código real de `002`/`003`/`004`, no asumido. Esta
-  feature de frontend asume que esos endpoints van a existir para cuando
-  se implemente (por una feature de backend previa o paralela, mismo
-  patrón que dio origen a `004`) — no expande su propio alcance para
-  construirlos, porque el pedido original la enmarca explícitamente como
-  "el cliente que consume el backend ya construido".
+- **Dependencias de backend**: los cinco grupos de endpoints que faltaban
+  originalmente (catálogos, fuero, asignaciones de jueces, editores,
+  catálogo de preguntas de taxonomía) los resolvió `006`, ya mergeada. Tres
+  capacidades siguen sin existir y quedan diferidas a la feature `007`:
+  cambiar el rol de un usuario, fijar una contraseña nueva desde el
+  cliente, y crear usuarios desde la app.
+- **Alta de usuarios (decisión 5) — tensión conocida con el backend
+  actual**: la decisión es que los usuarios los crea únicamente un admin y
+  que no hay registro público. Esta feature cumple la parte que le
+  corresponde (ninguna pantalla de registro), pero **no puede ofrecer la
+  pantalla de alta por admin** porque el backend no tiene endpoint para
+  ello (queda para `007`). Además, hoy el backend sigue permitiendo por sí
+  mismo que se cree una identidad al ingresar por Google o enlace por
+  email, y expone el alta con contraseña como ruta propia de su librería
+  de autenticación; cerrarlo es trabajo de `007`, no de un cliente web
+  (Principio II: el frontend no es una barrera de acceso).
+- **Pools solo dentro de la asignación de jueces (decisión 4)**: se gestionan
+  con los endpoints de pools que ya existían (`002`), acotados por
+  provincia; el diálogo hereda esa regla (un usuario no admin solo ve y
+  edita pools de su provincia).
+- **Provincia (decisión 6)**: la regla "fija para `usuario_normal`" es de
+  experiencia de usuario, no de seguridad — el backend no compara la
+  provincia de un organismo con la del usuario; no se le pide que lo haga
+  en esta feature.
 - **Corrección de la cita de `docs/expectativas-nueva-app.md`**: el pedido
   original citó "ítems 1, 3, 5, 6, 8, 9, 10 fuera de alcance — no 2, 4, 7"
   pero la enumeración en prosa que lo acompañaba (rol
@@ -525,7 +585,8 @@ que el cambio se refleja en lo que ese usuario puede hacer.
   feature solo necesita el enlace, no valida su contenido.
 - El "checklist de completitud" (US7) se basa en datos ya visibles por la
   app (organismo con datos básicos, al menos 1 UF cargada, taxonomía con
-  al menos una respuesta) — no en un criterio de negocio adicional no
+  al menos una respuesta, o sin preguntas aplicables a su tipo, en cuyo caso
+  cuenta como completa) — no en un criterio de negocio adicional no
   especificado; si el criterio real es otro, es un ajuste de contenido
   liviano sobre esta base, no un cambio de alcance.
 - La exportación a PDF (US7) se genera en el cliente, a partir de los

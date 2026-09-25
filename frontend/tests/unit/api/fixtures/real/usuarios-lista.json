@@ -1,0 +1,36 @@
+[
+  {
+    "id": "97",
+    "email": "usuario-0@ejemplo.test",
+    "nombre_display": "Usuario 0",
+    "provincia_id": 10,
+    "roles": [
+      "usuario_normal"
+    ]
+  },
+  {
+    "id": "98",
+    "email": "usuario-1@ejemplo.test",
+    "nombre_display": "Usuario 1",
+    "provincia_id": 7,
+    "roles": [
+      "usuario_normal"
+    ]
+  },
+  {
+    "id": "99",
+    "email": "usuario-2@ejemplo.test",
+    "nombre_display": "Usuario 2",
+    "provincia_id": 7,
+    "roles": [
+      "usuario_normal"
+    ]
+  },
+  {
+    "id": "1274",
+    "email": "fixture@ejemplo.test",
+    "nombre_display": "Fixture",
+    "provincia_id": 1,
+    "roles": null
+  }
+]

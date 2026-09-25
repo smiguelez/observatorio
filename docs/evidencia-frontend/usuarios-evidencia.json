@@ -1,0 +1,12 @@
+{
+  "lista": {
+    "usuariosEnBase": 49,
+    "filasEnUi": 49,
+    "discrepanciasUiVsSql": 0,
+    "admins": 4
+  },
+  "escrituras": [],
+  "botonesHabilitados": 0,
+  "pedidosDeUsuariosSiendoNormal": [],
+  "fixturesRestantes": "0"
+}

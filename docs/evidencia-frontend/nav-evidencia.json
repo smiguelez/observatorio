@@ -1,0 +1,43 @@
+{
+  "gruposUsuarioNormal": [
+    "Organismos",
+    "Reportes"
+  ],
+  "enlacesUsuarioNormal": [
+    "Mis organismos",
+    "Tableros ↗ (se abre en otra pestaña)"
+  ],
+  "clicsPorPantalla": {
+    "/organismos": {
+      "perfil": 2,
+      "ajustes": 2,
+      "tableros": 1
+    },
+    "/organismos/755": {
+      "perfil": 2,
+      "ajustes": 2,
+      "tableros": 1
+    },
+    "/organismos/755/taxonomia": {
+      "perfil": 2,
+      "ajustes": 2,
+      "tableros": 1
+    },
+    "/organismos/755/unidades-funcionales/nueva": {
+      "perfil": 2,
+      "ajustes": 2,
+      "tableros": 1
+    },
+    "/organismos/nuevo": {
+      "perfil": 2,
+      "ajustes": 2,
+      "tableros": 1
+    }
+  },
+  "gruposAdmin": [
+    "Organismos",
+    "Reportes",
+    "Administración"
+  ],
+  "fixturesRestantes": "0"
+}

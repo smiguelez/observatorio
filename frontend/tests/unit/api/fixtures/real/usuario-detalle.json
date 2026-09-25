@@ -1,0 +1,9 @@
+{
+  "id": "1274",
+  "email": "fixture@ejemplo.test",
+  "nombre_display": "Fixture",
+  "email_verificado": false,
+  "foto_url": null,
+  "provincia_id": 1,
+  "roles": null
+}

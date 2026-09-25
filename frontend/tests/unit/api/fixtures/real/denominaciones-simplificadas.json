@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "nombre": "Oficina Judicial"
+  },
+  {
+    "id": 2,
+    "nombre": "Oficina de Gestión Asociada"
+  },
+  {
+    "id": 3,
+    "nombre": "Oficina de Tramitación Integral"
+  },
+  {
+    "id": 4,
+    "nombre": "Oficina de Gestión de Audiencias"
+  },
+  {
+    "id": 5,
+    "nombre": "Oficina de Juicio por Jurados"
+  },
+  {
+    "id": 6,
+    "nombre": "Oficina Judicial Especializada"
+  },
+  {
+    "id": 7,
+    "nombre": "Oficina de Medidas Alternativas y Conciliación"
+  },
+  {
+    "id": 8,
+    "nombre": "Dirección o Coordinación General de Oficinas Judiciales"
+  },
+  {
+    "id": 9,
+    "nombre": "Mesa de Entradas Centralizada"
+  },
+  {
+    "id": 10,
+    "nombre": "Unidad de Servicios Procesales"
+  }
+]

@@ -18,9 +18,9 @@ import { Input } from '@/components/ui/input'
 
 const Esquema = z.object({
   denominacion: z.string().trim().min(1, 'Ingresá la denominación'),
-  denominacionSimplificadaId: z.number(),
-  tipoOficinaId: z.number(),
-  provinciaId: z.number(),
+  denominacionSimplificadaId: z.number().positive(),
+  tipoOficinaId: z.number().positive(),
+  provinciaId: z.number().positive(),
 })
 type Valores = z.infer<typeof Esquema>
 
@@ -41,6 +41,8 @@ export default function DatosTab() {
   const esAdmin = sesion?.rol === 'admin'
   const form = useForm<Valores>({
     resolver: zodResolver(Esquema),
+    // Sin `defaultValues`, el campo de texto arranca `undefined` (no controlado) y pasa a controlado al cargar.
+    defaultValues: { denominacion: '' } as Valores,
     values: organismo && {
       denominacion: organismo.denominacion,
       denominacionSimplificadaId: organismo.denominacionSimplificadaId,

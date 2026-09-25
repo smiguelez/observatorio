@@ -62,6 +62,9 @@ prefijo `test-frontend-*` y los **borran** al terminar. Requieren:
   `VITE_DATASTUDIO_URL=https://datastudio.example.test/reporte`.
 - Chromium de Playwright: `npx playwright install chromium` (y sus librerías del sistema).
 
+`comparacion-visual.spec.ts` (SC-007) necesita además la SPA vieja: ver `tests/visual/spa-vieja/README.md`; sin
+`VIEJA_URL` se omite. Ojo con el disco: esa SPA instala ~500 MB de `node_modules` en un directorio temporal.
+
 Los archivos de evidencia se escriben a donde indiquen `*_EVIDENCIA` / `*_PNG` (ver cada spec).
 
 ## Estructura

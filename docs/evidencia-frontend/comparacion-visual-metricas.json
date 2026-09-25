@@ -1,0 +1,87 @@
+{
+  "menu-lista": {
+    "vieja": {
+      "fuente": "ui-sans-serif",
+      "fondoPagina": "rgb(249, 250, 251)",
+      "botonPrincipal": "rgb(37, 99, 235)",
+      "barraLateral": false,
+      "migasDePan": false,
+      "selectsNativos": 0,
+      "radios": 0,
+      "pestanas": 0,
+      "tarjetas": 1
+    },
+    "nueva": {
+      "fuente": "Geist Variable",
+      "fondoPagina": "oklch(1 0 0)",
+      "botonPrincipal": "oklch(0.205 0 0)",
+      "barraLateral": true,
+      "migasDePan": true,
+      "selectsNativos": 0,
+      "radios": 0,
+      "pestanas": 0,
+      "tarjetas": 2
+    },
+    "pixelesDistintosPorcentaje": 5,
+    "similitudDeTintaJaccard": 0.01
+  },
+  "alta": {
+    "vieja": {
+      "fuente": "ui-sans-serif",
+      "fondoPagina": "rgb(249, 250, 251)",
+      "botonPrincipal": "rgb(37, 99, 235)",
+      "barraLateral": false,
+      "migasDePan": false,
+      "selectsNativos": 3,
+      "radios": 0,
+      "pestanas": 0,
+      "tarjetas": 3
+    },
+    "nueva": {
+      "fuente": "Geist Variable",
+      "fondoPagina": "oklch(1 0 0)",
+      "botonPrincipal": "oklch(0.205 0 0)",
+      "barraLateral": true,
+      "migasDePan": true,
+      "selectsNativos": 3,
+      "radios": 0,
+      "pestanas": 0,
+      "tarjetas": 2
+    },
+    "pixelesDistintosPorcentaje": 3.9,
+    "similitudDeTintaJaccard": 0.02
+  },
+  "taxonomia": {
+    "vieja": {
+      "fuente": "ui-sans-serif",
+      "fondoPagina": "rgb(249, 250, 251)",
+      "botonPrincipal": "rgb(37, 99, 235)",
+      "barraLateral": false,
+      "migasDePan": false,
+      "selectsNativos": 9,
+      "radios": 0,
+      "pestanas": 3,
+      "tarjetas": 22
+    },
+    "nueva": {
+      "fuente": "Geist Variable",
+      "fondoPagina": "oklch(1 0 0)",
+      "botonPrincipal": "oklch(0.205 0 0)",
+      "barraLateral": true,
+      "migasDePan": true,
+      "selectsNativos": 0,
+      "radios": 64,
+      "pestanas": 4,
+      "tarjetas": 2
+    },
+    "pixelesDistintosPorcentaje": 5.8,
+    "similitudDeTintaJaccard": 0.02
+  },
+  "controles": {
+    "mismaImagen": 1,
+    "viejaAltaVsViejaTaxonomia": 0.31,
+    "nuevaAltaVsNuevaTaxonomia": 0.13,
+    "viejaMenuVsViejaAlta": 0.22,
+    "nuevaListaVsNuevaAlta": 0.17
+  }
+}

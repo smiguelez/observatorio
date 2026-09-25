@@ -365,3 +365,110 @@ problemas de accesibilidad; no reemplaza una revisión con lector de pantalla.
 4. **Datos**: `taxonomia_preguntas.texto` es igual a `codigo` en las 9 preguntas (falta cargar los enunciados); las 9 son de opción única.
 5. Todo `bigint` se serializa como string (D13, ya registrado).
 6. Sigue sin haber cambio de rol, fijar contraseña ni alta controlada de usuarios (D14).
+
+
+## Success Criteria: veredicto por criterio (actualizado tras SC-002 y SC-007)
+
+| SC | Veredicto |
+|---|---|
+| SC-001 | **No confirmable**: depende de T030 (Google sin credencial) y además no hay envío real de correo (G4) |
+| SC-002 | **Confirmado en lo técnico** con un recorrido único (abajo); la parte de usabilidad humana no se mide con pruebas automáticas |
+| SC-003 | Confirmado con los datos reales (9 de 9 de opción única); los otros 3 tipos solo con catálogo sintético |
+| SC-004 | Confirmado en los casos probados (no es una prueba exhaustiva); `GET /api/usuarios` sigue abierto a cualquier autenticado por diseño del backend |
+| SC-005 | Confirmado (2 / 2 / 1 clics en 5 pantallas de escritorio) |
+| SC-006 | Confirmado (117 organismos reales, 0 discrepancias contra SQL) |
+| SC-007 | **Confirmado para las pantallas comparadas** (abajo); no se comparó el 100% de las pantallas |
+| SC-008 | Confirmado (3 causas reales y 6 simuladas, mismo texto) |
+| SC-009 | Confirmado en lo funcional; la descubribilidad no se probó con personas |
+
+### SC-002 — recorrido único con un usuario sin datos previos (`recorrido-sc002.spec.ts`, passed)
+
+Usuario recién creado (sin provincia, sin organismos), **una sola sesión, sin recargar la página después de
+entrar** (0 cargas de documento; el `reload` final es solo la verificación de persistencia):
+
+1. Entra y ve la lista vacía. Pulsa "Nuevo organismo": la app **no** le muestra un formulario imposible, le
+   explica que falta la provincia y el propio mensaje lo lleva al perfil.
+2. Elige su provincia **una vez** (Córdoba) y guarda.
+3. Vuelve a "Nuevo organismo": la provincia **ya viene puesta y bloqueada** (no se la vuelve a pedir). Completa
+   denominación, denominación simplificada y tipo (`oficina judicial`) y crea el organismo.
+4. Desde el detalle, un clic a "Taxonomía": el formulario **no vuelve a pedir ningún dato del organismo** (ni
+   campos de texto ni combos) y muestra las **9** preguntas aplicables; responde las 9 y guarda.
+
+Resultado: **13 acciones del usuario** (1 provincia + 3 datos del organismo + 9 preguntas; ninguna repetida),
+**2,9 s** de reloj de la máquina desde que llega a la lista hasta "Respuestas guardadas"; en la base el
+organismo queda con su nombre, provincia Córdoba y propietario correctos, y **9 respuestas** de taxonomía; tras
+recargar, las 9 siguen marcadas (`docs/evidencia-frontend/sc002-evidencia.json`).
+
+Límites de esta evidencia: es una prueba automatizada (el tiempo es de máquina, no de una persona; "sin volver a
+preguntar cómo hacerlo" es un juicio de usabilidad que solo se puede medir con personas). El recorrido incluye
+un desvío obligatorio (completar la provincia en el perfil) que la app explica pero que no es opcional.
+
+**Hallazgo de diseño para decidir** (no lo cubre ningún SC): en la SPA vieja un usuario sin provincia veía
+"Un administrador tiene que asignarte una provincia"; en la app nueva **el propio usuario elige su provincia en
+el perfil**, porque `PATCH /api/usuarios/:id` lo permite (`002`, FR-016: el propio usuario o un admin). La
+provincia de un organismo es "fija para `usuario_normal`" solo respecto de la del perfil, y esa la puede cambiar
+él mismo. Si la intención era que solo un admin asigne la provincia, hoy no se cumple (ni en el backend ni en la
+UI).
+
+### SC-007 — comparación visual contra la SPA vieja (`comparacion-visual.spec.ts`, passed)
+
+Cómo se hizo: se ejecutó el **código de `src/` sin modificar** con Firebase reemplazado por stubs en memoria
+(`frontend/tests/visual/spa-vieja/`), ambas apps con los **mismos datos sintéticos** ("Organismo de ejemplo A/B/C")
+y el mismo viewport (1280×720). Capturas lado a lado en `docs/evidencia-frontend/`:
+`comparacion-menu-lista.png`, `comparacion-alta.png`, `comparacion-taxonomia.png`; métricas en
+`comparacion-visual-metricas.json`.
+
+Rasgos objetivos medidos en el DOM (SPA vieja → app nueva):
+
+| Rasgo | SPA vieja | App nueva |
+|---|---|---|
+| Fuente | `ui-sans-serif` (sistema) | Geist Variable |
+| Fondo / botón principal | gris claro `rgb(249,250,251)` / azul `rgb(37,99,235)` | blanco / negro `oklch(0.205 0 0)` |
+| Barra lateral y migas de pan | no / no | sí / sí |
+| Taxonomía: controles | **9 `<select>` nativos**, 22 tarjetas azules, 3 pestañas | **64 radios** (opción única), fieldsets, 4 pestañas (agrega Editores) |
+| Primera pantalla tras entrar | menú de botones centrados | lista con navegación agrupada |
+
+Métrica de diferencia: la diferencia cruda de píxeles dio solo **3,9–5,8 %** y **contradijo mi expectativa
+inicial** (había fijado > 30 %): las dos pantallas son mayormente fondo claro y esa métrica queda artificialmente
+baja aun siendo pantallas evidentemente distintas. Se reemplazó por la **similitud de "tinta"** (Jaccard: qué
+parte del contenido dibujado está en el mismo lugar), con el umbral fijado **antes** de medir (una copia
+superaría 0,8; se exige < 0,5), y con controles:
+
+| Comparación | Jaccard |
+|---|---|
+| **vieja vs. nueva**: menú/lista · alta · taxonomía | **0,01 · 0,02 · 0,02** |
+| la misma imagen contra sí misma (control positivo) | 1,00 |
+| mismo diseño, otra pantalla — vieja: menú vs alta · alta vs taxonomía | 0,22 · 0,31 |
+| mismo diseño, otra pantalla — nueva: lista vs alta · alta vs taxonomía | 0,17 · 0,13 |
+
+Es decir, pantallas equivalentes de las dos apps se parecen **menos** entre sí que dos pantallas distintas de una
+misma app. Es una medida de disposición del contenido, no un juicio sobre el "lenguaje de diseño"; por eso se
+acompaña de las capturas y de los rasgos medidos arriba.
+
+**Parecidos que sí hay (por diseño, no copia visual):** los mismos campos en el alta (denominación,
+denominación simplificada, tipo, provincia), la misma agrupación de la taxonomía por dimensión con los mismos
+textos de opciones (datos), pestañas "Unidades funcionales" y "Taxonomía", y el mismo enunciado legible sin
+guiones bajos ("insercion institucional") porque ambos parten del mismo dato (D19). En el alta cambia a propósito
+un rasgo funcional: el fuero pasa de select editable a solo lectura.
+
+**Lo que NO cubre:** solo se compararon 3 pantallas (4 contando el menú). No se compararon el login (la SPA
+vieja solo lo muestra sin sesión, con Google como único método), la lista/alta de UF, la gestión de organismos,
+la asignación de editores ni la gestión de usuarios de la SPA vieja; perfil, ajustes y el diálogo de pools no
+tienen contraparte. La SPA vieja se ejecutó con Firebase simulado; el código de interfaz es el original.
+
+### Defectos y problemas encontrados en esta pasada
+
+1. **Latente y real**: un `Select` de catálogo podía enviar el id `0` (`Number('')` cuando Radix llama a
+   `onValueChange('')`), que el backend rechaza con **500** por la FK (misma familia que D16). Apareció al
+   agregar `defaultValues` a los formularios y rompió la prueba de sesión vencida; se ignora el valor vacío y el
+   esquema exige ids positivos. La causa exacta (Radix) es una hipótesis: el síntoma se reprodujo y desapareció
+   con la guarda, pero no aislé la llamada.
+2. Formularios que pasaban de campo no controlado a controlado (avisos de React) en datos del organismo, perfil y
+   UF: ahora tienen `defaultValues`.
+3. **Disco casi lleno del equipo** (`/` al 95 %, ~1,2 GB libres tras borrar ~1 GB de mis temporales): con el
+   disco al 100 % el navegador falló al cargar módulos (`ERR_INSUFFICIENT_RESOURCES`) y dio fallos falsos en
+   pruebas que antes pasaban. No era un defecto de la app; conviene liberar espacio (la SPA vieja instala ~500 MB
+   de `node_modules` por corrida).
+
+Suite tras estos cambios: Vitest 152 passed; Playwright **57 passed, 3 omitidos** (la comparación sin
+`VIEJA_URL`); base sin fixtures (47 usuarios, 117 organismos, 262 pools).

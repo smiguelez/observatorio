@@ -56,7 +56,7 @@ export default function UnidadFormPage() {
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
   const [dialogo, setDialogo] = useState(false)
 
-  const form = useForm<Valores>({ resolver: zodResolver(Esquema), values: editando ? (unidad.data && desdeUnidad(unidad.data)) : VACIOS })
+  const form = useForm<Valores>({ resolver: zodResolver(Esquema), defaultValues: VACIOS, values: editando ? (unidad.data && desdeUnidad(unidad.data)) : undefined })
 
   // La localidad se elige entre las de la provincia del organismo (el backend devuelve todas).
   const deLaProvincia = (localidades.data ?? []).filter((l) => l.provinciaId === organismo?.provinciaId)

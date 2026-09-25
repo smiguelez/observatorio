@@ -29,6 +29,7 @@ export default function PerfilPage() {
 
   const form = useForm<Valores>({
     resolver: zodResolver(Esquema),
+    defaultValues: { nombreDisplay: '', provinciaId: null, fotoUrl: '' },
     values: usuario.data && { nombreDisplay: usuario.data.nombreDisplay ?? '', provinciaId: usuario.data.provinciaId, fotoUrl: usuario.data.fotoUrl ?? '' },
   })
 

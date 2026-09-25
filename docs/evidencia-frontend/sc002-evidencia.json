@@ -1,0 +1,25 @@
+{
+  "recorrido": {
+    "acciones": [
+      "provincia",
+      "denominación",
+      "denominación simplificada",
+      "tipo de oficina",
+      "pregunta 1",
+      "pregunta 2",
+      "pregunta 3",
+      "pregunta 4",
+      "pregunta 5",
+      "pregunta 6",
+      "pregunta 7",
+      "pregunta 8",
+      "pregunta 9"
+    ],
+    "cantidadDeAcciones": 13,
+    "segundos": 2.9,
+    "recargasTrasEntrar": 1,
+    "organismoEnBase": "test-frontend-organismo del recorrido|Córdoba|test-frontend-sc002@example.test",
+    "respuestasEnBase": 9
+  },
+  "fixturesRestantes": "0"
+}

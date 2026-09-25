@@ -469,3 +469,55 @@ migración de datos nueva (las migraciones aplicadas no se editan — `backend/R
 enunciados no está confirmada en este repositorio; a definir por quien conoce el instrumento. Relacionado: las 9
 preguntas son todas de `opcion_unica`, así que los otros tres tipos de respuesta (múltiple, numérica, texto libre)
 no tienen ninguna pregunta real todavía y solo se probaron con un catálogo sintético.
+
+---
+
+**D20 — Un usuario puede autoasignarse cualquier provincia y con eso ganar acceso a los pools de esa provincia (hallazgo de `005` para `007`, 2026-09-24). PRIORIDAD ALTA: es un problema de autorización, no de UX.**
+
+**Qué pasa hoy** (verificado en el código de `002`, `reformulacion`):
+- `PATCH /api/usuarios/:id` (`backend/src/routes/usuarios.ts`) acepta `provinciaId` y lo autoriza con
+  `puedeEditarUsuario` (`authz/usuarios.ts`): **el propio usuario o un admin**. No hay ningún control sobre el
+  valor de `provinciaId`.
+- Ese campo **decide el acceso a los pools de jueces**: `resolverIdentidad` relee `provincia_id` de `usuarios` en
+  cada request, y `estaAutorizadoParaProvincia`/`puedeGestionarPool` (`authz/pools-jueces.ts`, vía
+  `mismaProvincia()`) autorizan según esa provincia. Con ella `GET /api/pools-jueces` lista los pools de esa
+  provincia y `POST/PATCH/DELETE` permiten crearlos, modificarlos y borrarlos.
+- Consecuencia: **cualquier usuario autenticado puede cambiarse a cualquier provincia y ganar, sin intervención
+  de un admin, lectura y escritura sobre los pools de esa provincia**, y volver a cambiarse a otra. (La
+  autorización de organismos/UF/taxonomía/editores va por propietario/editor/admin y **no** depende de este campo.)
+
+**Cómo se relaciona con la app vieja (matiz importante).**
+- En la **interfaz** vieja, la provincia la asignaba un admin: `CrearOrganismoForm.jsx` muestra "No podés crear
+  organismos todavía: no tenés una provincia asignada. Un administrador tiene que asignarte una provincia…". La app
+  nueva (`005`) permite lo contrario: el perfil deja elegir la provincia (verificado en el recorrido de SC-002).
+- En la **capa de autorización** vieja no había diferencia: las reglas de Firestore
+  (`docs/firestore-rules-actuales.rules`, `match /users/{userId}`) permitían `write: if request.auth.token.email
+  == userId || esAdmin()`, es decir, cada usuario podía escribir su propio documento —incluida `provincia`, y
+  también `rol`—. `002` portó esa regla (Principio VI) y **cerró la parte de `rol`** (el `PATCH` no acepta rol),
+  pero dejó abierta la de `provincia`. Es decir: no es una regresión respecto de las reglas viejas, sino una
+  debilidad heredada que la UI vieja ocultaba y la app nueva expone.
+
+**Decisión (Santi, 2026-09-24):** se resuelve en `007`, **restringiendo la escritura de `provinciaId` a admin
+únicamente**, con el mismo criterio que `propietario_id` en organismos (el servidor no confía en lo que manda el
+cliente). No bloquea `005` ni `006` porque todavía no hay usuarios reales expuestos, pero es **de mayor prioridad
+que las otras deudas de `007`** por su naturaleza de autorización.
+
+**A definir en `007` (detalles de la corrección, no de la decisión):**
+- qué hace el servidor con `provinciaId` de un no admin: **rechazar con `403`** (visible) o **ignorarlo en
+  silencio** (como `propietario_id`). Se sugiere `403`: ignorarlo dejaría a la UI mostrando "cambios guardados" sin
+  que cambie nada;
+- cómo asigna la provincia un admin: hoy la pantalla de usuarios de `005` es de solo lectura (US9, decisión 1);
+  hace falta que el admin pueda editar la provincia de un usuario (backend ya lo permite; falta la UI);
+- cuál es el estado de un usuario recién creado (por Google o enlace, D14): sin provincia hasta que un admin la
+  asigne; quién avisa al admin (relacionado con D14 y el ítem 9 del backlog);
+- revisar si `foto_url` y `nombre_display` merecen algún control (hoy editables por el propio usuario, sin
+  impacto de autorización).
+
+**Cambios de frontend que implica** (a hacer junto con `007`): el selector de provincia de `/perfil` pasa a solo
+lectura para `usuario_normal`; el mensaje del alta sin provincia deja de decir "completá tu provincia en tu
+perfil" y pasa a "pedile a un administrador que te asigne una provincia"; y el recorrido de SC-002
+(`recorrido-sc002.spec.ts`) cambia, porque un usuario nuevo ya no podrá completar el alta por sí solo.
+
+**Mientras tanto**, el frontend ya trata la provincia como UX, no como control de acceso (Principio II), y así
+está dicho en `docs/resultado-verificacion-frontend-20260924.md`; pero eso no protege los pools: la barrera real
+es la del backend.

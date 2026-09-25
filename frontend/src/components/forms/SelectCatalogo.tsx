@@ -13,8 +13,10 @@ interface Props {
 
 /** Combo de un catálogo `{id, nombre}`; el valor es el id numérico (Radix trabaja con strings). */
 export default function SelectCatalogo({ id, valor, opciones, alCambiar, placeholder = 'Elegí una opción', deshabilitado, invalido }: Props) {
+  // Radix llama a onValueChange('') al limpiar/sincronizar el valor: Number('') es 0, un id inexistente
+  // (el backend respondería 500 por FK). Se ignora.
   return (
-    <Select value={valor === null ? '' : String(valor)} onValueChange={(v) => alCambiar(Number(v))} disabled={deshabilitado}>
+    <Select value={valor == null ? '' : String(valor)} onValueChange={(v) => { if (v !== '') alCambiar(Number(v)) }} disabled={deshabilitado}>
       <SelectTrigger id={id} className="w-full" aria-invalid={invalido}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>

@@ -70,6 +70,10 @@ la Fase A construye.
   solo.
 - **T030**: probar Google de punta a punta — bloqueado por una credencial
   OAuth de desarrollo real, no por código (ver Fase E).
+- Borrado de pool en uso: el frontend traduce hoy el `500`/`23503` a
+  `PoolEnUsoError` (`frontend/src/api/pools.ts`), lógica ahora obsoleta
+  (D16); debe leer en su lugar el `400 { error, ... }` nuevo del backend —
+  no probado todavía.
 
 ---
 

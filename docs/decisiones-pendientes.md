@@ -304,18 +304,11 @@ propia — no se resuelve de pasada dentro de ninguna otra.
 
 ---
 
-**D14 — Alta de usuarios sin control administrativo: gap de seguridad activo, resuelto por diseño (2026-09-24).**
+**D14 — Alta de usuarios sin control administrativo: gap de seguridad, resuelto por diseño (2026-09-24): RESUELTA (2026-09-25).**
 
-> **✅ RESUELTO por `007-identidad-autorizacion` (2026-09-25).** Se implementó la opción 1 y se cerró además un
-> camino que D14 no cubría (FR-004 de `007`): el alta pública por contraseña sobre un email **ya provisionado** cuyo
-> dueño nunca ingresó entregaba una sesión de esa cuenta (verificado el 2026-09-25). Mecanismo: el
-> `databaseHooks.user.create.before` (`backend/src/auth/identidad-hook.ts`) rechaza con `403 ACCESO_NO_AUTORIZADO`
-> (uniforme, sin revelar si el email existe) todo email que no esté en `usuarios` por los tres métodos, y
-> `emailAndPassword.disableSignUp: true` elimina el alta pública por contraseña. Las altas las hace un admin
-> (`POST /api/usuarios`) y entrega un acceso inicial de un solo uso. Evidencia: `docs/resultado-verificacion-007-20260925.md`.
 
-Hoy cualquiera puede crear una cuenta por contraseña (ruta de Better Auth
-expuesta), Google, o magic link con cualquier email — no hay ningún
+Hasta `007`, cualquiera podía crear una cuenta por contraseña (ruta de Better Auth
+expuesta), Google, o magic link con cualquier email — no había ningún
 control de "solo un admin crea usuarios" a nivel de backend, pese a que
 esa es la intención declarada del sistema (Santi, `005-frontend-cliente`).
 El frontend no ofrecer una pantalla de registro NO cierra esta puerta,
@@ -342,6 +335,19 @@ real, solo lo loguea en consola). No se pierde nada por construir la
 opción 1 ahora: el chequeo de "¿está provisionado?" es el mismo en ambas,
 solo cambia qué pasa cuando la respuesta es no — la opción 2 puede
 agregarse después sin rehacer la 1.
+
+**Resolución (`007-identidad-autorizacion`, 2026-09-25)**: se implementó la opción 1 tal como se decidió, y se cerró
+además un camino que D14 no cubría (FR-004 de `007`, verificado el 2026-09-25): el alta pública por contraseña sobre un
+email **ya provisionado** cuyo dueño nunca había ingresado entregaba una sesión de esa cuenta. El hook
+`databaseHooks.user.create.before` (`backend/src/auth/identidad-hook.ts`) rechaza con `403 ACCESO_NO_AUTORIZADO`
+—mensaje uniforme, sin revelar si el email existe— todo email que no esté en `usuarios`, por los tres métodos y sin
+excepción por método; `emailAndPassword.disableSignUp: true` elimina el alta pública por contraseña (verificado por
+HTTP y por la API de servidor); y el pedido de enlace para un email no dado de alta responde igual que el de uno dado
+de alta pero no crea ni registra ningún enlace. Las altas ahora las hace un admin: `POST /api/usuarios` (email,
+provincia, rol inicial) entrega un acceso inicial de un solo uso (vence en `ACCESO_INICIAL_TTL_HORAS`, 24 h) que la
+persona canjea en `POST /api/acceso-inicial/canjear` para fijar su contraseña. Cierra también **G5** de `005`. La
+opción 2 (solicitud de acceso con aprobación) sigue en el backlog, sin implementar. Evidencia:
+`docs/resultado-verificacion-007-20260925.md` (servidor real + 197 tests + spike 19/19).
 
 ---
 
@@ -383,14 +389,8 @@ ejemplo N") en lugar de copiar filas reales de la base.
 
 ---
 
-**D16 — Errores de integridad sin capturar responden `500` en vez de `400` (hallazgo de `005` para `007`, 2026-09-24).**
+**D16 — Errores de integridad sin capturar responden `500` en vez de `400` (hallazgo de `005` para `007`, 2026-09-24): RESUELTA (2026-09-25).**
 
-> **✅ RESUELTO por `007` (2026-09-25).** Un manejador central (`backend/src/http/errores-integridad.ts`) traduce a
-> `400` con mensaje claro los errores de Postgres causados por datos del cliente (clase 23, clase 22 y `P0001` de los
-> triggers) con un mapa por constraint; `DELETE` ⇒ "en uso", el resto ⇒ "no existe" (el método HTTP desambigua `23503`).
-> Lo inesperado sigue siendo `500` sin exponer el detalle. Se quitaron los `try/catch` locales y `trigger-error.ts`.
-> Los dos `500` de `005` (borrar un pool en uso; UF con localidad inexistente) responden `400`. Revisión adicional
-> (FR-025): un valor fuera de rango (`smallint`) y un id mal formado también eran `500`; ahora `400`.
 
 `006` ya tradujo a un `400` con mensaje los rechazos de `UNIQUE`/`CHECK`/`FK` de **asignaciones de jueces** y de
 **editores** (`esRechazoDeIntegridad` / `mensajeDeIntegridad` en `backend/src/http/trigger-error.ts`), pero solo en
@@ -415,6 +415,23 @@ sobre un error genérico: si el backend devolviera un `400` con su propio texto 
 mapee los SQLSTATE `23503`/`23505`/`23514`/`23502` a `400` con un mensaje por constraint (ampliando
 `MENSAJES_POR_CONSTRAINT`), dejando el `500` para lo verdaderamente inesperado; y decidir la semántica del borrado
 de un pool en uso (rechazar con `400` —lo esperado hoy— o `ON DELETE` explícito).
+
+**Resolución (`007-identidad-autorizacion`, 2026-09-25)**: se adoptó la propuesta de un manejador central en lugar de
+`try/catch` por ruta. `backend/src/http/errores-integridad.ts` (`setErrorHandler` de Fastify) traduce a `400 { error }`
+los errores de Postgres causados por datos del cliente —clase 23 (integridad), clase 22 (valor fuera de rango o mal
+formado) y `P0001` (los `RAISE EXCEPTION` de los triggers)— con un mapa por constraint y, para los no mapeados, un
+mensaje genérico por tipo, sin nombres de tablas ni de constraints. La ambigüedad de `23503` se resuelve por método HTTP
+(`DELETE` ⇒ "en uso", el resto ⇒ "no existe"), no por el texto de `detail`, que Postgres localiza. Lo inesperado sigue
+siendo `500`, registrado y sin exponer el mensaje interno. Sobre lo que esta entrada dejaba a decidir: el borrado de un
+pool en uso se **rechaza con `400`** (`"El pool está asignado a unidades funcionales; quitalo de esas asignaciones antes
+de eliminarlo."`), sin `ON DELETE` (el pool sigue existiendo); y los casos "probables, no verificados" quedaron
+verificados con un test por constraint (`denominacionSimplificadaId`, `tipoOficinaId`, `provinciaId` de organismos y
+pools, tipo de UF). La revisión adicional de FR-025 encontró dos `500` más, ya cubiertos: un valor fuera de rango
+(`smallint`) y un id mal formado. Se quitaron los `try/catch` locales de `006` y `trigger-error.ts`. Con el manejador
+desactivado, cuatro de los tests nuevos vuelven a dar `500`: el test detecta el defecto. **Pendiente de la Fase B (no
+verificado):** el frontend traduce hoy el `500` con `code 23503` a `PoolEnUsoError` (`frontend/src/api/pools.ts`); con
+el `400` nuevo esa inferencia ya no se dispara y conviene mostrar el mensaje del servidor. Evidencia:
+`backend/tests/contract/errores-integridad.test.ts` y `docs/resultado-verificacion-007-20260925.md`.
 
 ---
 
@@ -441,13 +458,8 @@ regla.
 
 ---
 
-**D18 — Los errores de los triggers de taxonomía nombran la pregunta por id interno: FR-009 de `005` solo se cumple en parte (2026-09-24).**
+**D18 — Los errores de los triggers de taxonomía nombran la pregunta por id interno: FR-009 de `005` solo se cumple en parte (2026-09-24): RESUELTA (2026-09-25).**
 
-> **✅ RESUELTO por `007` (2026-09-25).** Migración `0004_taxonomia_mensajes_legibles` (solo reemplaza funciones,
-> reversible): los rechazos nombran la pregunta por su código (y texto si difiere) sin ids ni nombres de tabla, con
-> `DETAIL = 'preguntaCodigo=<codigo>'`. El `PUT /api/organismos/:orgId/taxonomia` responde
-> `400 { error, preguntaCodigo, preguntaTexto }` y valida antes que la opción pertenezca a la pregunta. Sigue abierto
-> D19 (cargar los enunciados reales): mientras tanto el texto coincide con el código.
 
 `FR-009` (`005`) pide identificar qué pregunta de taxonomía tuvo el problema cuando el backend rechaza un
 guardado. Los mensajes de los triggers (`backend/migrations/0001`–`0003`, `RAISE EXCEPTION`) y el `400` del `PUT
@@ -467,6 +479,20 @@ pregunta **solo** cuando el mensaje contiene su código. No se puede resaltar la
 *Propuesta para `007`:* que el `400` de `PUT …/taxonomia` devuelva un cuerpo estructurado
 (`{ error, preguntaCodigo, opcionCodigo? }`) además del mensaje, y un texto legible para personas; hoy el cliente
 solo puede parsear texto libre.
+
+**Resolución (`007-identidad-autorizacion`, 2026-09-25)**: migración `0004_taxonomia_mensajes_legibles` (solo reemplaza
+las funciones de los triggers de `0001` y `0003`; no toca tablas ni datos; `down` restaura las originales). Los
+rechazos nombran la pregunta por su `codigo` —más el `texto` entre paréntesis si difiere— y no incluyen ids ni nombres de
+tabla; por ejemplo, el caso capturado arriba ahora dice `La pregunta «autonomia» no aplica al tipo de organismo
+actual.` Cada rechazo que identifica una pregunta agrega `DETAIL = 'preguntaCodigo=<codigo>'`, y el `PUT
+/api/organismos/:orgId/taxonomia` lo lee de `err.detail` (independiente del idioma del servidor) y responde
+`400 { error, preguntaCodigo, preguntaTexto }`. Además valida antes de tocar la base que cada opción exista para la
+pregunta (`La opción «X» no existe para la pregunta «Y».`). **Desvío respecto de la propuesta:** el cuerpo no incluye
+`opcionCodigo`; la opción va en el texto del mensaje. Si hay varias respuestas inválidas se informa al menos la
+primera y no se guarda nada. Sigue abierto **D19**: mientras no se carguen los enunciados reales, `preguntaTexto`
+coincide con el código. El resaltado de la pregunta en el formulario es trabajo de la Fase B. Evidencia:
+`backend/tests/contract/taxonomia.test.ts` (sección 007), `backend/tests/integration/migracion-0004.test.ts` y
+`docs/resultado-verificacion-007-20260925.md`.
 
 ---
 
@@ -493,15 +519,10 @@ no tienen ninguna pregunta real todavía y solo se probaron con un catálogo sin
 
 ---
 
-**D20 — Un usuario puede autoasignarse cualquier provincia y con eso ganar acceso a los pools de esa provincia (hallazgo de `005` para `007`, 2026-09-24). PRIORIDAD ALTA: es un problema de autorización, no de UX.**
+**D20 — Un usuario puede autoasignarse cualquier provincia y con eso ganar acceso a los pools de esa provincia (hallazgo de `005` para `007`, 2026-09-24). PRIORIDAD ALTA: es un problema de autorización, no de UX: RESUELTA (2026-09-25).**
 
-> **✅ RESUELTO por `007` (2026-09-25).** `provinciaId` la escribe solo un admin: un no admin que intenta **cambiarla**
-> recibe `403` explícito y no se aplica nada de la solicitud; reenviar la provincia actual no es un cambio (FR-010,
-> mantiene compatible el perfil de `005` hasta la Fase B). El cambio rige en la siguiente solicitud del afectado. G1
-> (cambio de rol, `PUT /api/usuarios/:id/rol`, último admin protegido) y G3 (primer acceso y cambio de contraseña con
-> cierre de las demás sesiones) también quedaron cerrados en `007`.
 
-**Qué pasa hoy** (verificado en el código de `002`, `reformulacion`):
+**Qué pasaba antes de `007`** (verificado en el código de `002`, `reformulacion`):
 - `PATCH /api/usuarios/:id` (`backend/src/routes/usuarios.ts`) acepta `provinciaId` y lo autoriza con
   `puedeEditarUsuario` (`authz/usuarios.ts`): **el propio usuario o un admin**. No hay ningún control sobre el
   valor de `provinciaId`.
@@ -548,3 +569,27 @@ perfil" y pasa a "pedile a un administrador que te asigne una provincia"; y el r
 **Mientras tanto**, el frontend ya trata la provincia como UX, no como control de acceso (Principio II), y así
 está dicho en `docs/resultado-verificacion-frontend-20260924.md`; pero eso no protege los pools: la barrera real
 es la del backend.
+
+**Resolución (`007-identidad-autorizacion`, 2026-09-25)**: `provinciaId` la escribe solo un admin. Sobre los puntos que
+esta entrada dejaba "a definir": (a) un no admin que intenta **cambiarla** recibe `403` explícito
+(`"La provincia de un usuario solo la puede asignar un administrador."`) y la solicitud se rechaza **completa**, sin
+aplicar ni siquiera el nombre —se descartó ignorarla en silencio—; (b) reenviar la provincia **actual** no cuenta como
+cambio (FR-010): el perfil de `005` sigue funcionando hasta la Fase B, y un cambio real de provincia desde ese
+formulario dará `403`; (c) un admin la asigna con `PATCH /api/usuarios/:id` (provincia inexistente → `400` con
+mensaje) y rige desde la siguiente solicitud del afectado, sin re-login; (d) el alta administrada exige provincia para
+un usuario normal y la deja opcional para un admin. El selector de provincia de `/perfil` y el resto de los cambios de
+frontend de esta entrada siguen pendientes de la Fase B (fuera del alcance de `007`).
+
+**G1 y G3 (brechas de `005`, `specs/005-frontend-cliente/research.md`), cerradas en la misma feature:**
+- **G1 — sin endpoint para cambiar el rol de un usuario: RESUELTA (2026-09-25).** `PUT /api/usuarios/:id/rol
+  { rol: "admin" | "usuario_normal" }`, solo admin (`403` si no), agrega o quita la fila `admin` y conserva siempre
+  `usuario_normal`; rige en la siguiente solicitud sin re-login; el sistema nunca queda sin administradores
+  (`400` al quitarle el rol al último, verificado también en la carrera de dos degradaciones simultáneas); usuario o
+  rol inexistente → `404`/`400`, nunca `500`.
+- **G3 — sin forma de fijar o cambiar la contraseña desde el cliente: RESUELTA (2026-09-25).** *Fijar*: el acceso
+  inicial de D14 (`POST /api/acceso-inicial/canjear`, un solo uso y con vencimiento; `POST
+  /api/usuarios/:id/acceso-inicial` lo reemite e invalida el anterior); la contraseña sobrevive a un ingreso posterior
+  por Google o enlace. *Cambiar*: `POST /api/auth/change-password` (ya existía) ahora **fuerza en el servidor** que
+  las demás sesiones se cierren y que la cookie de la sesión actual rote. El restablecimiento por correo
+  (`request-password-reset`) sigue deshabilitado a propósito hasta el envío real de email (Fase C).
+- Los controles de UI correspondientes (rol y provincia editables, pantalla de primer acceso) son de la Fase B.

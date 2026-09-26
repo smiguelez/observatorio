@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
 import { asignarProvincia, crearUsuarioConClave, hacerAdmin, limpiarFixtures, PREFIJO, sql } from './helpers/backend'
-import { entrarUI } from './helpers/ui'
+import { elegir, entrarUI } from './helpers/ui'
 
 const ADM = `${PREFIJO}usr-admin@example.test`
 const NORMAL = `${PREFIJO}usr-normal@example.test`
@@ -22,7 +22,7 @@ test.afterAll(() => {
   writeFileSync(process.env.USR_EVIDENCIA ?? 'test-results/usuarios-evidencia.json', JSON.stringify(evidencia, null, 2))
 })
 
-test('21/22. admin: lista completa con email, roles y provincia; el cambio de rol está deshabilitado y no dispara nada', async ({ page }) => {
+test('21/22. admin: lista completa con email, roles y provincia; el cambio de rol y de provincia funciona de verdad (008)', async ({ page }) => {
   const escrituras: string[] = []
   page.on('request', (r) => {
     const p = new URL(r.url()).pathname
@@ -62,17 +62,36 @@ test('21/22. admin: lista completa con email, roles y provincia; el cambio de ro
   await page.getByLabel('Buscar por nombre o email').fill('')
   await expect(page.getByTestId('fila-usuario')).toHaveCount(total)
 
-  // Cambio de rol: TODOS los controles deshabilitados, con explicación; ningún pedido de escritura.
-  await expect(page.getByTestId('aviso-rol')).toContainText('todavía no está disponible')
-  const botones = page.getByRole('button', { name: /Cambiar rol de/ })
-  await expect(botones).toHaveCount(total)
-  const habilitados = await botones.evaluateAll((bs) => bs.filter((b) => !(b as HTMLButtonElement).disabled).length)
-  expect(habilitados).toBe(0)
-  await botones.first().click({ force: true }).catch(() => {})
-  await page.waitForTimeout(500)
-  evidencia.escrituras = escrituras
-  evidencia.botonesHabilitados = habilitados
-  expect(escrituras).toEqual([])
+  // 008: el control "No disponible" y el aviso de solo lectura de 005 YA NO EXISTEN; cada fila ofrece "Editar".
+  await expect(page.getByTestId('aviso-rol')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'No disponible' })).toHaveCount(0)
+  const editar = page.getByTestId('editar-usuario')
+  await expect(editar).toHaveCount(total)
+  expect(await editar.evaluateAll((bs) => bs.filter((b) => (b as HTMLButtonElement).disabled).length)).toBe(0)
+
+  // Cambio REAL de rol y de provincia sobre un usuario de fixtures; la verdad es SQL, no la pantalla.
+  const rolesDe = () => sql(`SELECT coalesce(string_agg(r.nombre, ',' ORDER BY r.nombre), '') FROM usuario_roles ur JOIN roles r ON r.id = ur.rol_id JOIN usuarios u ON u.id = ur.usuario_id WHERE u.email = '${NORMAL}'`)
+  const provinciaDe = () => sql(`SELECT p.nombre FROM usuarios u JOIN provincias p ON p.id = u.provincia_id WHERE u.email = '${NORMAL}'`)
+  await page.getByLabel('Buscar por nombre o email').fill(NORMAL)
+  await page.getByTestId('fila-usuario').getByTestId('editar-usuario').click()
+  const dialogo = page.getByTestId('editar-usuario-dialog')
+  await expect(dialogo.getByTestId('rol-actual')).toHaveText('Usuario normal')
+  const rolAntes = rolesDe()
+  await dialogo.getByTestId('boton-cambiar-rol').click() // otorgar admin: sin confirmación
+  await expect(dialogo.getByTestId('rol-actual')).toHaveText('Administrador')
+  const rolPromovido = rolesDe()
+  await dialogo.getByTestId('boton-cambiar-rol').click() // quitar admin: pide confirmación
+  await page.getByTestId('confirmar-quitar').click()
+  await expect(dialogo.getByTestId('rol-actual')).toHaveText('Usuario normal')
+  const rolDegradado = rolesDe()
+  await elegir(page, 'editar-provincia', 'Mendoza')
+  await dialogo.getByTestId('provincia-guardar').click()
+  await expect(dialogo.getByTestId('provincia-ok')).toBeVisible()
+  const provinciaNueva = provinciaDe()
+  await dialogo.getByRole('button', { name: 'Cerrar', exact: true }).first().click()
+  evidencia.cambios = { rolAntes, rolPromovido, rolDegradado, provinciaNueva, escrituras }
+  expect([rolAntes, rolPromovido, rolDegradado, provinciaNueva]).toEqual(['usuario_normal', 'admin,usuario_normal', 'usuario_normal', 'Mendoza'])
+  expect(escrituras).toEqual(['PUT /api/usuarios/' + sql(`SELECT id FROM usuarios WHERE email = '${NORMAL}'`) + '/rol', 'PUT /api/usuarios/' + sql(`SELECT id FROM usuarios WHERE email = '${NORMAL}'`) + '/rol', 'PATCH /api/usuarios/' + sql(`SELECT id FROM usuarios WHERE email = '${NORMAL}'`)])
   // Sin captura acá: esta pantalla muestra datos reales; las imágenes salen de evidencia-visual.spec.ts (anonimizadas).
 })
 

@@ -15,3 +15,10 @@ if (!window.matchMedia) {
     addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia
 }
+
+// jsdom no implementa estas APIs de puntero/scroll que Radix Select usa al abrir el combo (008: tests de diálogos con
+// selector de provincia). Sin ellas, abrir un `Select` lanza en jsdom.
+Element.prototype.hasPointerCapture ??= () => false
+Element.prototype.setPointerCapture ??= () => {}
+Element.prototype.releasePointerCapture ??= () => {}
+Element.prototype.scrollIntoView ??= () => {}

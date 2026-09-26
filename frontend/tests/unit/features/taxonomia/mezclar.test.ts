@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PreguntaTaxonomia, RespuestaTaxonomia } from '@/api/taxonomia'
-import { armarPut, etiquetaPregunta, mezclar, preguntasDelError } from '@/features/taxonomia/mezclar'
+import { armarPut, etiquetaPregunta, mezclar } from '@/features/taxonomia/mezclar'
 
 const opc = (...cs: string[]) => cs.map((c) => ({ codigo: c, etiqueta: c }))
 const catalogo: PreguntaTaxonomia[] = [
@@ -46,17 +46,5 @@ describe('etiquetaPregunta (FR-008): en la base real texto === codigo', () => {
   it('usa el texto si es un enunciado', () => expect(etiquetaPregunta({ codigo: 'x', texto: '¿Cómo depende?' })).toBe('¿Cómo depende?'))
   it('si el texto es el código, no muestra el identificador crudo', () => {
     expect(etiquetaPregunta({ codigo: 'insercion_institucional', texto: 'insercion_institucional' })).toBe('Insercion institucional')
-  })
-})
-
-describe('preguntasDelError', () => {
-  it('resalta las preguntas cuyo código aparece en "Pregunta(s) inexistente(s)"', () => {
-    expect(preguntasDelError('Pregunta(s) inexistente(s): u, zzz', catalogo)).toEqual(['u'])
-  })
-  it('un mensaje de trigger (id interno numérico) no resalta ninguna', () => {
-    expect(preguntasDelError('evaluaciones_taxonomicas: la pregunta 5 no aplica al tipo de organismo actual (Protección A)', catalogo)).toEqual([])
-  })
-  it('no confunde códigos que son prefijo de otros', () => {
-    expect(preguntasDelError('falla en u_extra', catalogo)).toEqual([])
   })
 })

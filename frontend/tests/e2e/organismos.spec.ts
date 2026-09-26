@@ -64,7 +64,10 @@ test('7. alta (usuario_normal): provincia fija, aparece en la lista sin recargar
 test('8. usuario sin provincia: alta bloqueada con explicación', async ({ page }) => {
   await entrarUI(page, SIN_PROV)
   await page.goto('/organismos/nuevo')
-  await expect(page.getByTestId('alta-sin-provincia')).toContainText('completar tu provincia')
+  const aviso = page.getByTestId('alta-sin-provincia')
+  await expect(aviso).toContainText('Pedile a un administrador que te asigne una provincia')
+  await expect(aviso).not.toContainText('completar tu provincia')
+  await expect(aviso.locator('a')).toHaveCount(0) // ya no lleva al perfil, donde no se puede resolver
   await expect(page.getByRole('button', { name: 'Crear organismo' })).toHaveCount(0)
 })
 

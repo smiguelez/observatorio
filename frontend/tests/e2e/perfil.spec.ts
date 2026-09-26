@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
-import { CLAVE, crearUsuarioConClave, limpiarFixtures, pedirMagicLink, PREFIJO, sql } from './helpers/backend'
+import { asignarProvincia, CLAVE, crearUsuarioConClave, crearUsuarioSinClave, limpiarFixtures, pedirMagicLink, PREFIJO, sesionApi, sql } from './helpers/backend'
 import { elegir, entrarUI } from './helpers/ui'
 
 const CON = `${PREFIJO}perfil-clave@example.test`
 const SIN = `${PREFIJO}perfil-enlace@example.test`
+const ADM_PERFIL = `${PREFIJO}perfil-admin@example.test`
 const NUEVA = 'otra-contrasena-99999'
 const evidencia: Record<string, unknown> = {}
 
@@ -13,6 +14,9 @@ test.describe.configure({ mode: 'serial' })
 test.beforeAll(async () => {
   limpiarFixtures()
   await crearUsuarioConClave(CON)
+  await crearUsuarioConClave(ADM_PERFIL, { rol: 'admin' })
+  // 23d: cuenta dada de alta que nunca fijó contraseña. Un magic link para un email no dado de alta ya no genera enlace (007).
+  await crearUsuarioSinClave(SIN)
 })
 test.afterAll(() => {
   limpiarFixtures()
@@ -20,22 +24,44 @@ test.afterAll(() => {
   writeFileSync(process.env.PERFIL_EVIDENCIA ?? 'test-results/perfil-evidencia.json', JSON.stringify(evidencia, null, 2))
 })
 
-test('23a. editar datos propios: se guardan y la provincia de la sesión cambia de inmediato', async ({ page }) => {
+test('23a. la provincia de un usuario normal es de SOLO LECTURA; guardar el nombre funciona y el PATCH no lleva provincia (008)', async ({ page }) => {
   await entrarUI(page, CON)
+  asignarProvincia(CON, 6) // Córdoba: la asignó "un administrador" (por SQL, es un fixture)
   await page.goto('/perfil')
   await expect(page.getByTestId('perfil-email')).toHaveText(CON)
+  await expect(page.getByTestId('provincia-solo-lectura')).toContainText('La asigna un administrador')
+  await expect(page.getByTestId('provincia-valor')).toHaveText('Córdoba')
+  await expect(page.locator('#provinciaId')).toHaveCount(0) // sin selector
+
+  const patches: { url: string; cuerpo: string }[] = []
+  page.on('request', (r) => { if (r.method() === 'PATCH' && new URL(r.url()).pathname.startsWith('/api/usuarios/')) patches.push({ url: r.url(), cuerpo: r.postData() ?? '' }) })
   await page.getByLabel('Nombre', { exact: true }).fill('Persona de Prueba')
-  await elegir(page, 'provinciaId', 'Córdoba')
   await page.getByRole('button', { name: 'Guardar cambios' }).click()
   await expect(page.getByTestId('mensaje-perfil')).toContainText('Cambios guardados')
   const fila = sql(`SELECT nombre_display || '/' || p.nombre FROM usuarios u JOIN provincias p ON p.id=u.provincia_id WHERE u.email = '${CON}'`)
   evidencia.datosEnBase = fila
   expect(fila).toBe('Persona de Prueba/Córdoba')
+  expect(patches).toHaveLength(1)
+  expect(JSON.parse(patches[0]!.cuerpo)).not.toHaveProperty('provinciaId') // ni siquiera la actual
+  evidencia.patchSinProvincia = JSON.parse(patches[0]!.cuerpo)
 
-  // "Se refleja de inmediato": el alta de organismo ya trae la provincia nueva, sin recargar ni volver a entrar.
-  await page.getByRole('link', { name: 'Mis organismos' }).click()
-  await page.getByRole('link', { name: 'Nuevo organismo' }).click()
-  await expect(page.locator('#provinciaId')).toContainText('Córdoba')
+  // Un intento de cambio directo contra el servidor (lo que ya no ofrece la pantalla) recibe el 403 explícito de 007.
+  const api = await sesionApi(CON)
+  const r = await api.patch(`/api/usuarios/${sql(`SELECT id FROM usuarios WHERE email = '${CON}'`)}`, { provinciaId: 9 })
+  expect(r.status).toBe(403)
+  expect(r.json.error).toBe('La provincia de un usuario solo la puede asignar un administrador.')
+  expect(sql(`SELECT provincia_id FROM usuarios WHERE email = '${CON}'`)).toBe('6')
+  evidencia.cambioDirecto403 = r.json.error
+})
+
+test('23a-bis. un ADMINISTRADOR sí edita su provincia en el perfil', async ({ page }) => {
+  await entrarUI(page, ADM_PERFIL)
+  await page.goto('/perfil')
+  await expect(page.locator('#provinciaId')).toBeVisible()
+  await elegir(page, 'provinciaId', 'Mendoza')
+  await page.getByRole('button', { name: 'Guardar cambios' }).click()
+  await expect(page.getByTestId('mensaje-perfil')).toContainText('Cambios guardados')
+  expect(sql(`SELECT p.nombre FROM usuarios u JOIN provincias p ON p.id=u.provincia_id WHERE u.email = '${ADM_PERFIL}'`)).toBe('Mendoza')
 })
 
 test('23b. métodos de acceso: refleja los reales de la cuenta', async ({ page }) => {

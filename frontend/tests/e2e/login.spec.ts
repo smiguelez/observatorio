@@ -1,11 +1,14 @@
-import { expect, request, test, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
 import {
-  CLAVE, contarFixtures, crearUsuarioConClave, limpiarFixtures, pedirMagicLink, PREFIJO, ultimoMagicLink,
+  CLAVE, contarFixtures, crearUsuarioConClave, crearUsuarioSinClave, limpiarFixtures, PREFIJO, sql, ultimoMagicLink,
 } from './helpers/backend'
 
 const OK = `${PREFIJO}login@example.test`
-const REVOCADO = `${PREFIJO}revocada@example.test`
+// Cuenta dada de alta por un admin que NUNCA fijó contraseña (007). Reemplaza al fixture "credencial revocada" de 005:
+// esa premisa (alta con contraseña sin verificar el email + magic link => Better Auth borra la credencial) ya no existe,
+// porque el alta administrada deja `emailVerified = true` y una contraseña fijada por el acceso inicial sobrevive.
+const SIN_CLAVE = `${PREFIJO}sinclave@example.test`
 const ENLACE = `${PREFIJO}enlace@example.test`
 const INEXISTENTE = `${PREFIJO}no-existe@example.test`
 const MENSAJE = 'Email o contraseña incorrectos.'
@@ -16,14 +19,9 @@ test.describe.configure({ mode: 'serial' })
 test.beforeAll(async () => {
   limpiarFixtures()
   await crearUsuarioConClave(OK)
-  // Credencial invalidada por el backend: alta con contraseña SIN verificar el email, y luego
-  // verificación del email por magic link => Better Auth borra la credencial (revokeUnprovenAccountAccess).
-  await crearUsuarioConClave(REVOCADO)
-  const link = await pedirMagicLink(REVOCADO)
-  // Vite escucha en ::1; el fetch de Node resolvería 127.0.0.1. El contexto de Playwright resuelve bien `localhost`.
-  const ctx = await request.newContext()
-  await ctx.get(link, { maxRedirects: 0 })
-  await ctx.dispose()
+  await crearUsuarioSinClave(SIN_CLAVE)
+  // El magic link ya no se pide para un email inexistente (007 no genera enlace): el usuario del test 3 se da de alta antes.
+  await crearUsuarioSinClave(ENLACE)
 })
 
 test.afterAll(() => {
@@ -61,17 +59,17 @@ test('1. login por contraseña entra a /organismos', async ({ page }) => {
 test('4. tres causas de fallo distintas => exactamente el mismo mensaje', async ({ page }) => {
   const errada = await intentarContrasena(page, OK, 'contrasena-equivocada')
   const inexistente = await intentarContrasena(page, INEXISTENTE, CLAVE)
-  const revocada = await intentarContrasena(page, REVOCADO, CLAVE)
+  const sinClave = await intentarContrasena(page, SIN_CLAVE, CLAVE)
   await page.screenshot({ path: process.env.LOGIN_PNG ?? 'test-results/login-error.png' })
 
-  evidencia.mensajes = { errada: errada.texto, inexistente: inexistente.texto, revocada: revocada.texto }
+  evidencia.mensajes = { errada: errada.texto, inexistente: inexistente.texto, sinContrasena: sinClave.texto }
   evidencia.respuestasDelBackend = {
-    errada: errada.respuestas, inexistente: inexistente.respuestas, revocada: revocada.respuestas,
+    errada: errada.respuestas, inexistente: inexistente.respuestas, sinContrasena: sinClave.respuestas,
   }
   expect(errada.texto).toContain(MENSAJE)
   expect(inexistente.texto).toBe(errada.texto)
-  expect(revocada.texto).toBe(errada.texto)
-  for (const r of [errada, inexistente, revocada]) expect(r.respuestas.map((x) => x.status)).toEqual([401])
+  expect(sinClave.texto).toBe(errada.texto)
+  for (const r of [errada, inexistente, sinClave]) expect(r.respuestas.map((x) => x.status)).toEqual([401])
 })
 
 test('3. magic link: pedido desde la UI, consumo del link, y link reusado', async ({ page }) => {
@@ -95,6 +93,20 @@ test('3. magic link: pedido desde la UI, consumo del link, y link reusado', asyn
   await page.goto(link)
   await expect(page).toHaveURL(/\/login\?error=INVALID_TOKEN/)
   await expect(page.getByTestId('login-error-url')).toContainText('El enlace es inválido o venció')
+})
+
+test('3b. pedir un enlace para un email NO dado de alta muestra lo mismo, pero no genera ningún enlace (007, FR-003)', async ({ page }) => {
+  const noAlta = `${PREFIJO}enlace-no-alta@example.test`
+  await page.goto('/login')
+  await page.getByRole('tab', { name: 'Con enlace por email' }).click()
+  await page.getByLabel('Email', { exact: true }).fill(noAlta)
+  await page.getByRole('button', { name: 'Enviarme un enlace' }).click()
+  // Indistinguible de un email dado de alta (test 3): la pantalla no revela si el email existe.
+  await expect(page.getByTestId('enlace-enviado')).toBeVisible()
+  // Pero no quedó ningún enlace utilizable ni ninguna identidad.
+  expect(sql(`SELECT count(*) FROM auth.verification WHERE value LIKE '%${noAlta}%'`)).toBe('0')
+  expect(sql(`SELECT count(*) FROM usuarios WHERE email = '${noAlta}'`)).toBe('0')
+  evidencia.enlaceEmailNoDadoDeAlta = { enlaceEnviadoVisible: true, verificaciones: 0, usuarios: 0 }
 })
 
 test('2. Google: el botón lleva a Google con el redirect_uri de este origen', async ({ page }) => {

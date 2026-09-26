@@ -37,6 +37,8 @@ function extraerMensaje(cuerpo: unknown, status: number): { mensaje: string; cod
     const c = cuerpo as { error?: unknown; message?: unknown; code?: unknown }
     const mensaje = typeof c.error === 'string' ? c.error : typeof c.message === 'string' ? c.message : undefined
     const codigo = typeof c.code === 'string' ? c.code : undefined
+    // Un rechazo de validación de esquema de Fastify trae `error: "Bad Request"`: no es un mensaje para personas.
+    if (codigo === 'FST_ERR_VALIDATION') return { mensaje: 'Los datos enviados no son válidos.', codigo }
     if (mensaje) return { mensaje, codigo }
   }
   return { mensaje: `Error ${status}` }

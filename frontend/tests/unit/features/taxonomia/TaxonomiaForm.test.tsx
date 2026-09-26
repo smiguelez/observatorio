@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PreguntaTaxonomia, RespuestaTaxonomia } from '@/api/taxonomia'
 import TaxonomiaForm from '@/features/taxonomia/TaxonomiaForm'
+import rechazoReal from '../../api/fixtures/real/error-taxonomia-pregunta.json'
 
 const opc = (...cs: string[]) => cs.map((c) => ({ codigo: c, etiqueta: `Etiqueta ${c}` }))
 // Catálogo SINTÉTICO con los 4 tipos (SC-003): la base real solo tiene 9 preguntas de opción única.
@@ -95,13 +96,56 @@ describe('TaxonomiaForm — guardado', () => {
     expect(cuerpoPut).toEqual({ respuestas: [] })
   })
 
-  it('un 400 del servidor muestra su mensaje completo y resalta la pregunta si el mensaje la nombra', async () => {
+  // 008 (D18/007): el servidor indica la pregunta con un dato PROPIO (`preguntaCodigo`/`preguntaTexto`); el cliente ya no la
+  // busca dentro del texto del mensaje.
+  it('un 400 con preguntaCodigo: resalta ESA pregunta y muestra el mensaje completo del servidor', async () => {
     const u = userEvent.setup()
-    montar(respuestas, 400, { error: 'Pregunta(s) inexistente(s): medios' })
+    montar(respuestas, 400, { ...rechazoReal, preguntaCodigo: 'medios', preguntaTexto: '¿Con qué medios cuenta?', error: 'La pregunta «medios» (¿Con qué medios cuenta?) no aplica al tipo de organismo actual.' })
     await u.click(screen.getByRole('button', { name: 'Guardar taxonomía' }))
     const alerta = await screen.findByTestId('taxonomia-error')
-    expect(alerta).toHaveTextContent('Pregunta(s) inexistente(s): medios')
+    expect(alerta).toHaveTextContent('La pregunta «medios» (¿Con qué medios cuenta?) no aplica al tipo de organismo actual.')
     expect(screen.getByTestId('pregunta-medios')).toHaveAttribute('data-invalid', 'true')
     expect(screen.getByTestId('pregunta-agentes')).not.toHaveAttribute('data-invalid')
+  })
+
+  it('con el rechazo REAL de 007 (fixture) resalta la pregunta que indica el servidor', async () => {
+    const u = userEvent.setup()
+    montar(respuestas, 400, rechazoReal)
+    await u.click(screen.getByRole('button', { name: 'Guardar taxonomía' }))
+    expect(await screen.findByTestId('taxonomia-error')).toHaveTextContent(rechazoReal.error)
+    expect(screen.getByTestId(`pregunta-${rechazoReal.preguntaCodigo}`)).toHaveAttribute('data-invalid', 'true')
+  })
+
+  it('un 400 SIN preguntaCodigo (pregunta inexistente): solo el mensaje, ninguna pregunta resaltada', async () => {
+    const u = userEvent.setup()
+    montar(respuestas, 400, { error: 'Pregunta(s) inexistente(s): medios' }) // cita un código del formulario, pero NO trae el campo
+    await u.click(screen.getByRole('button', { name: 'Guardar taxonomía' }))
+    expect(await screen.findByTestId('taxonomia-error')).toHaveTextContent('Pregunta(s) inexistente(s): medios')
+    for (const c of ['insercion_institucional', 'medios', 'agentes', 'observaciones']) {
+      expect(screen.getByTestId(`pregunta-${c}`)).not.toHaveAttribute('data-invalid')
+    }
+  })
+
+  it('un mensaje que CITA un código entre «» pero sin el campo estructurado NO resalta (se acabó la búsqueda en el texto)', async () => {
+    const u = userEvent.setup()
+    montar(respuestas, 400, { error: 'La pregunta «agentes» no aplica al tipo de organismo actual.' })
+    await u.click(screen.getByRole('button', { name: 'Guardar taxonomía' }))
+    expect(await screen.findByTestId('taxonomia-error')).toBeInTheDocument()
+    expect(screen.getByTestId('pregunta-agentes')).not.toHaveAttribute('data-invalid')
+  })
+
+  it('preguntaCodigo que NO está en el formulario: se muestra el mensaje y no falla ni resalta nada', async () => {
+    const u = userEvent.setup()
+    montar(respuestas, 400, { error: 'La pregunta «otra» no aplica.', preguntaCodigo: 'otra', preguntaTexto: 'otra' })
+    await u.click(screen.getByRole('button', { name: 'Guardar taxonomía' }))
+    expect(await screen.findByTestId('taxonomia-error')).toHaveTextContent('La pregunta «otra» no aplica.')
+    expect(screen.getByTestId('form-taxonomia').querySelectorAll('[data-invalid="true"]')).toHaveLength(0)
+  })
+
+  it('un cuerpo con preguntaCodigo de tipo inválido (deriva del contrato) no lanza: solo el mensaje', async () => {
+    const u = userEvent.setup()
+    montar(respuestas, 400, { error: 'x', preguntaCodigo: 42 })
+    await u.click(screen.getByRole('button', { name: 'Guardar taxonomía' }))
+    expect(await screen.findByTestId('taxonomia-error')).toHaveTextContent('x')
   })
 })

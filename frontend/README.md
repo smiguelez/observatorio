@@ -60,7 +60,16 @@ prefijo `test-frontend-*` y los **borran** al terminar. Requieren:
 - `BACKEND_LOG`: archivo donde se redirige el stdout del backend (el magic link se **loguea**, no se envía).
 - Backend y `npm run dev` corriendo; para `navegacion.spec.ts`, el dev server con
   `VITE_DATASTUDIO_URL=https://datastudio.example.test/reporte`.
-- Chromium de Playwright: `npx playwright install chromium` (y sus librerías del sistema).
+- Chromium de Playwright: `npx playwright install chromium` (y sus librerías del sistema). **Sin ninguna fuente instalada en el
+  sistema el texto no se dibuja** y Playwright ve los elementos como "hidden" (los `<h1>` miden 0×0): en un servidor sin
+  fuentes hay que instalar al menos una (p. ej. `fonts-dejavu-core`).
+- **Cómo se crean los usuarios de fixtures (008)**: `007` eliminó el alta pública por contraseña. `helpers/backend.ts`
+  (`crearUsuarioConClave`) hace **alta administrada + canje del acceso inicial** por la API real (`POST /api/usuarios` y
+  `POST /api/acceso-inicial/canjear`). El **único** arranque por SQL es el admin de fixtures `test-frontend-boot@example.test`
+  (hace falta un admin autenticado para dar de alta y no hay admin sin credenciales); se crea/verifica en cada llamada y se
+  borra con el resto por prefijo, junto con los `reset-password:*` que dejen. Por defecto el usuario queda **sin provincia**
+  (por SQL, el estado de partida de los tests de 005); `{ provinciaId: n }` conserva la que dio el alta.
+  `crearUsuarioSinClave` da de alta **sin canjear** (cuenta que nunca fijó contraseña).
 
 `comparacion-visual.spec.ts` (SC-007) necesita además la SPA vieja: ver `tests/visual/spa-vieja/README.md`; sin
 `VIEJA_URL` se omite. Ojo con el disco: esa SPA instala ~500 MB de `node_modules` en un directorio temporal.
@@ -107,8 +116,11 @@ distinta y visible; un no-admin en `/admin/*` ve lo mismo que ante una ruta inex
 
 ### Lo que NO existe a propósito
 
-Ruta o menú de pools (se gestionan **solo** dentro del diálogo de asignación de una UF), pantalla de
-registro, cambio de rol de usuarios, y "fijar contraseña" (requieren backend nuevo: `007`).
+Ruta o menú de pools (se gestionan **solo** dentro del diálogo de asignación de una UF) y pantalla de registro
+público: no hay forma de crearse una cuenta solo. Desde `007`/`008` **sí** existen, para un administrador, el alta de
+usuarios con acceso inicial (`/admin/usuarios`) y el cambio de rol/provincia; y la pantalla pública `/primer-acceso`
+(única, además de `/login`, que se abre sin sesión) donde la persona invitada fija su contraseña con el enlace que le pasó el
+administrador. El acceso viaja en el **fragmento** de la URL, se quita de la dirección al leerlo y nunca se persiste.
 
 ## Limitaciones conocidas
 

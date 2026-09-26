@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
-import { asignarProvincia, crearUsuarioConClave, hacerAdmin, limpiarFixtures, PREFIJO, sesionApi, sql } from './helpers/backend'
-import { entrarUI } from './helpers/ui'
+import { asignarProvincia, crearUsuarioConClave, crearUsuarioSinClave, hacerAdmin, limpiarFixtures, PREFIJO, sesionApi, sql } from './helpers/backend'
+import { elegir, entrarUI } from './helpers/ui'
 
 // Capturas para `docs/evidencia-frontend/` de pantallas que, contra la base real, muestran DATOS REALES
 // (emails y nombres de usuarios, denominaciones de organismos y de pools). Acá los valores reales se
@@ -69,7 +69,7 @@ test('captura: completitud de organismos (admin), datos anonimizados', async ({ 
   await page.screenshot({ path: `${OUT}/admin-organismos.png` })
 })
 
-test('captura: borrar un pool en uso (500 real), datos anonimizados', async ({ page }) => {
+test('captura: borrar un pool en uso (400 real de 007), datos anonimizados', async ({ page }) => {
   const api = await sesionApi(U)
   const org = (await api.post('/api/organismos', { denominacion: `${PREFIJO}org vis`, denominacionSimplificadaId: 1, tipoOficinaId: 1, provinciaId: 1 })).json
   const loc = Number(sql('SELECT id FROM localidades WHERE provincia_id = 1 ORDER BY id LIMIT 1'))
@@ -88,10 +88,60 @@ test('captura: borrar un pool en uso (500 real), datos anonimizados', async ({ p
   await fila.getByRole('button', { name: /Eliminar pool/ }).click()
   await page.getByRole('button', { name: 'Eliminar pool', exact: true }).click()
   const alerta = page.getByTestId('mensaje-pools')
-  await expect(alerta).toContainText('puede estar asignado a otras unidades funcionales')
-  expect(estados).toEqual([500])
+  await expect(alerta).toContainText('El pool está asignado a unidades funcionales; quitalo de esas asignaciones antes de eliminarlo.')
+  expect(estados).toEqual([400])
   const descripciones = await page.getByTestId('fila-pool').evaluateAll((f) => f.map((e) => (e.querySelector('input') as HTMLInputElement).value))
   expect(descripciones.every((d) => /^Pool de ejemplo \d+$/.test(d) || d.startsWith('test-frontend-'))).toBe(true)
   await alerta.scrollIntoViewIfNeeded()
   await page.screenshot({ path: `${OUT}/pool-en-uso.png` })
+})
+
+// 008: capturas de la Fase B. El enlace de acceso inicial es un SECRETO vivo (sirve una vez): antes de dibujar la imagen se
+// reemplaza su token por un texto fijo; la lista de usuarios sale anonimizada como en la captura de arriba.
+test('captura: editar usuario (rol y provincia), datos anonimizados', async ({ page }) => {
+  await anonimizar(page)
+  await entrarUI(page, ADM)
+  await page.goto('/admin/usuarios')
+  await expect(page.getByTestId('fila-usuario').first()).toBeVisible()
+  await page.locator('[data-testid="fila-usuario"]', { hasText: U }).getByTestId('editar-usuario').click()
+  await expect(page.getByTestId('editar-usuario-dialog')).toBeVisible()
+  await page.waitForTimeout(500) // termina la animación de entrada del diálogo
+  await page.screenshot({ path: `${OUT}/admin-usuarios-editar.png` })
+})
+
+test('captura: alta de usuario y enlace de acceso inicial (token redactado)', async ({ page }) => {
+  await anonimizar(page)
+  await entrarUI(page, ADM)
+  await page.goto('/admin/usuarios')
+  await page.getByTestId('alta-usuario').click()
+  await expect(page.getByTestId('alta-usuario-dialog')).toBeVisible()
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: `${OUT}/alta-usuario.png` })
+  await page.getByTestId('alta-usuario-dialog').getByLabel('Email').fill(`${PREFIJO}vis-nueva@ejemplo.test`)
+  await elegir(page, 'alta-provincia', 'Córdoba')
+  await page.getByTestId('alta-usuario-dialog').getByRole('button', { name: 'Dar de alta' }).click()
+  const enlace = page.getByTestId('enlace-acceso')
+  await expect(enlace).toBeVisible()
+  const token = (await enlace.inputValue()).split('#token=')[1]!
+  // El secreto NO sale en la imagen: se reemplaza el valor visible y se verifica que ya no aparece en la pantalla.
+  await enlace.evaluate((el: HTMLInputElement, origen) => { el.value = `${origen}/primer-acceso#token=<REDACTADO>` }, new URL(page.url()).origin)
+  expect((await page.locator('body').innerText())).not.toContain(token)
+  expect(await page.evaluate(() => (document.querySelector('#enlace-acceso') as HTMLInputElement).value)).not.toContain(token)
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: `${OUT}/alta-usuario-enlace.png` })
+  sql(`DELETE FROM auth.verification WHERE identifier = 'reset-password:${token}'`) // el token de la captura deja de existir
+})
+
+test('captura: pantalla pública de canje (formulario y acceso no válido)', async ({ browser }) => {
+  const { token } = await crearUsuarioSinClave(`${PREFIJO}vis-canje@example.test`, 1)
+  const ctx = await browser.newContext()
+  const page = await ctx.newPage()
+  await page.goto(`/primer-acceso#token=${token}`)
+  await expect(page.getByTestId('primer-acceso-form')).toBeVisible()
+  await page.screenshot({ path: `${OUT}/primer-acceso.png` })
+  await page.goto('/primer-acceso')
+  await expect(page.getByTestId('acceso-no-valido')).toBeVisible()
+  await page.screenshot({ path: `${OUT}/primer-acceso-no-valido.png` })
+  sql(`DELETE FROM auth.verification WHERE identifier = 'reset-password:${token}'`)
+  await ctx.close()
 })

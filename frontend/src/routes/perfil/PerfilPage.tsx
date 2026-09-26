@@ -7,7 +7,7 @@ import { useActualizarUsuario, useUsuario } from '@/api/usuarios'
 import { useSesion } from '@/auth/useSesion'
 import SelectCatalogo from '@/components/forms/SelectCatalogo'
 import { Button } from '@/components/ui/button'
-import { Field, FieldError, FieldLabel } from '@/components/ui/field'
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import CambiarPassword from './CambiarPassword'
@@ -26,6 +26,9 @@ export default function PerfilPage() {
   const provincias = useProvincias()
   const actualizar = useActualizarUsuario(sesion!.usuarioId)
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+  // 008 (D20/007): la provincia la asigna un administrador. Un usuario normal la VE pero no la cambia (el servidor rechazaría
+  // el cambio con 403); un admin sigue pudiendo editarla. Es UX: la barrera real es el servidor (Principio II).
+  const puedeEditarProvincia = sesion?.rol === 'admin'
 
   const form = useForm<Valores>({
     resolver: zodResolver(Esquema),
@@ -36,10 +39,11 @@ export default function PerfilPage() {
   async function guardar(v: Valores) {
     setMensaje(null)
     try {
-      // PATCH con COALESCE: solo se envía lo que tiene valor (la provincia no se puede vaciar una vez cargada).
+      // PATCH con COALESCE: solo se envía lo que tiene valor. La provincia se envía SOLO si el usuario puede editarla (admin):
+      // un usuario normal no la manda nunca, ni siquiera la actual.
       await actualizar.mutateAsync({
         nombreDisplay: v.nombreDisplay,
-        ...(v.provinciaId !== null ? { provinciaId: v.provinciaId } : {}),
+        ...(puedeEditarProvincia && v.provinciaId !== null ? { provinciaId: v.provinciaId } : {}),
         fotoUrl: v.fotoUrl,
       })
       setMensaje({ tipo: 'ok', texto: 'Cambios guardados.' })
@@ -70,16 +74,26 @@ export default function PerfilPage() {
               </Field>
             )}
           />
-          <Controller
-            name="provinciaId"
-            control={form.control}
-            render={({ field }) => (
-              <Field>
-                <FieldLabel htmlFor="provinciaId">Provincia</FieldLabel>
-                <SelectCatalogo id="provinciaId" valor={field.value ?? null} opciones={provincias.data ?? []} alCambiar={field.onChange} placeholder="Sin provincia cargada" />
-              </Field>
-            )}
-          />
+          {puedeEditarProvincia ? (
+            <Controller
+              name="provinciaId"
+              control={form.control}
+              render={({ field }) => (
+                <Field>
+                  <FieldLabel htmlFor="provinciaId">Provincia</FieldLabel>
+                  <SelectCatalogo id="provinciaId" valor={field.value ?? null} opciones={provincias.data ?? []} alCambiar={field.onChange} placeholder="Sin provincia cargada" />
+                </Field>
+              )}
+            />
+          ) : (
+            <Field data-testid="provincia-solo-lectura">
+              <FieldLabel htmlFor="provincia-lectura">Provincia</FieldLabel>
+              <p id="provincia-lectura" data-testid="provincia-valor" className="text-sm">
+                {provincias.data?.find((p) => p.id === usuario.data.provinciaId)?.nombre ?? 'Sin provincia asignada'}
+              </p>
+              <FieldDescription>La asigna un administrador.</FieldDescription>
+            </Field>
+          )}
           <Controller
             name="fotoUrl"
             control={form.control}

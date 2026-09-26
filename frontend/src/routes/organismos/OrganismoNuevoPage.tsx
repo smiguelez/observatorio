@@ -54,10 +54,7 @@ export default function OrganismoNuevoPage() {
       <section className="mx-auto max-w-xl" data-testid="alta-sin-provincia">
         <h1 className="text-xl font-semibold">Nuevo organismo</h1>
         <div role="alert" className="mt-4 rounded-md border p-4 text-sm">
-          Para dar de alta un organismo primero tenés que completar tu provincia en tu perfil.{' '}
-          <Link className="underline" to="/perfil">
-            Ir a mi perfil
-          </Link>
+          Pedile a un administrador que te asigne una provincia.
         </div>
       </section>
     )

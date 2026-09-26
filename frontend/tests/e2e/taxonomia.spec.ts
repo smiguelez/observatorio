@@ -108,7 +108,13 @@ test('13. error real del backend (400): mensaje completo junto al formulario', a
   expect(cambio.status).toBe(200)
 
   const estados: number[] = []
-  page.on('response', (r) => { if (r.request().method() === 'PUT') estados.push(r.status()) })
+  const cuerpos: { error: string; preguntaCodigo?: string; preguntaTexto?: string }[] = []
+  page.on('response', async (r) => {
+    if (r.request().method() === 'PUT') {
+      estados.push(r.status())
+      cuerpos.push(await r.json())
+    }
+  })
   await page.locator('[data-testid^="pregunta-"]').first().getByRole('radio').first().check()
   await page.getByRole('button', { name: 'Guardar taxonomía' }).click()
   const alerta = page.getByTestId('taxonomia-error')
@@ -116,21 +122,40 @@ test('13. error real del backend (400): mensaje completo junto al formulario', a
   evidencia.errorReal = { estadosPut: estados, mensaje: (await alerta.textContent())?.trim() }
   expect(estados).toEqual([400])
   await expect(alerta).toContainText('no aplica al tipo de organismo')
+  // 008 (D18): el servidor identifica la pregunta con un dato PROPIO y la pantalla resalta EXACTAMENTE esa (sin ids internos).
+  const { preguntaCodigo, preguntaTexto, error } = cuerpos[0]!
+  expect(preguntaCodigo).toBeTruthy()
+  expect(preguntaTexto).toBeTruthy()
+  expect(error).toContain(`«${preguntaCodigo}»`)
+  expect(error).not.toMatch(/\b\d+\b|pregunta_id|tipo_oficina_id|evaluaciones_taxonomicas/) // sin ids ni nombres de tabla
+  await expect(page.getByTestId(`pregunta-${preguntaCodigo}`)).toHaveAttribute('data-invalid', 'true')
+  await expect(page.locator('[data-testid^="pregunta-"][data-invalid="true"]')).toHaveCount(1)
+  evidencia.preguntaIdentificada = { preguntaCodigo, preguntaTexto }
   expect(sql(`SELECT count(*) FROM evaluaciones_taxonomicas WHERE organismo_id = ${id}`)).toBe('0')
 })
 
-test('13b. rechazo que nombra la pregunta (mock de red): se resalta la pregunta', async ({ page }) => {
+test('13b. rechazo con la pregunta como dato estructurado (mock de red): se resalta esa pregunta; sin pregunta no se resalta nada', async ({ page }) => {
   const id = await crearOrg('org mock', 1)
   const catalogo = (await api.get('/api/taxonomia/preguntas?tipoOficinaId=1')).json as { codigo: string }[]
+  let cuerpo: object = {}
   await entrarUI(page, U)
   await page.route(`**/api/organismos/${id}/taxonomia`, (route) =>
     route.request().method() === 'PUT'
-      ? route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: `Pregunta(s) inexistente(s): ${catalogo[2]!.codigo}` }) })
+      ? route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify(cuerpo) })
       : route.continue(),
   )
   await page.goto(`/organismos/${id}/taxonomia`)
   await page.locator('[data-testid^="pregunta-"]').first().getByRole('radio').first().check()
+
+  // (a) con preguntaCodigo/preguntaTexto (forma real de 007): se resalta esa pregunta
+  cuerpo = { error: `La pregunta «${catalogo[2]!.codigo}» no aplica al tipo de organismo actual.`, preguntaCodigo: catalogo[2]!.codigo, preguntaTexto: catalogo[2]!.codigo }
   await page.getByRole('button', { name: 'Guardar taxonomía' }).click()
   await expect(page.getByTestId(`pregunta-${catalogo[2]!.codigo}`)).toHaveAttribute('data-invalid', 'true')
   await expect(page.getByTestId(`pregunta-${catalogo[0]!.codigo}`)).not.toHaveAttribute('data-invalid', 'true')
+
+  // (b) sin preguntaCodigo ("Pregunta(s) inexistente(s)"): solo el mensaje, aunque cite un código del formulario
+  cuerpo = { error: `Pregunta(s) inexistente(s): ${catalogo[1]!.codigo}` }
+  await page.getByRole('button', { name: 'Guardar taxonomía' }).click()
+  await expect(page.getByTestId('taxonomia-error')).toContainText('Pregunta(s) inexistente(s)')
+  await expect(page.locator('[data-testid^="pregunta-"][data-invalid="true"]')).toHaveCount(0)
 })

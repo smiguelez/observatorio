@@ -5,7 +5,8 @@ import { ApiError } from '@/api/http'
 import { useGuardarTaxonomia, type PreguntaTaxonomia, type RespuestaTaxonomia } from '@/api/taxonomia'
 import { Button } from '@/components/ui/button'
 import { construirEsquema, type ValoresTaxonomia } from './esquema'
-import { armarPut, etiquetaGrupo, etiquetaPregunta, mezclar, preguntasDelError } from './mezclar'
+import { preguntaDelError } from './errorTaxonomia'
+import { armarPut, etiquetaGrupo, etiquetaPregunta, mezclar } from './mezclar'
 import Numerica from './controles/Numerica'
 import OpcionMultiple from './controles/OpcionMultiple'
 import OpcionUnica from './controles/OpcionUnica'
@@ -44,7 +45,9 @@ export default function TaxonomiaForm({ orgId, catalogo, respuestas }: Props) {
       setGuardado(true)
     } catch (e) {
       const mensaje = e instanceof ApiError || e instanceof Error ? e.message : 'No se pudo guardar la taxonomía'
-      setError({ mensaje, resaltadas: e instanceof ApiError && e.status === 400 ? preguntasDelError(mensaje, catalogo) : [] })
+      // Solo se resalta la pregunta que el servidor indica Y que está en el formulario; si no, solo el mensaje.
+      const indicada = preguntaDelError(e)
+      setError({ mensaje, resaltadas: indicada !== null && catalogo.some((p) => p.codigo === indicada) ? [indicada] : [] })
     }
   }
 

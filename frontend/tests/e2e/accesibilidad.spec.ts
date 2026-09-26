@@ -1,7 +1,8 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
-import { asignarProvincia, crearUsuarioConClave, hacerAdmin, limpiarFixtures, PREFIJO, sesionApi, sql } from './helpers/backend'
+import { asignarProvincia, crearUsuarioConClave, crearUsuarioSinClave, hacerAdmin, limpiarFixtures, PREFIJO, sesionApi, sql } from './helpers/backend'
+import { elegir } from './helpers/ui'
 import { entrarUI } from './helpers/ui'
 
 // Auditoría automática de accesibilidad (axe-core, reglas WCAG 2.x A/AA) sobre las pantallas principales
@@ -108,4 +109,31 @@ test('pantallas de admin y móvil', async ({ page }) => {
   await page.getByRole('button', { name: 'Abrir o cerrar el menú' }).click()
   await expect(page.getByRole('dialog').getByRole('link', { name: 'Mis organismos' })).toBeVisible()
   await auditar(page, 'móvil: menú lateral abierto (sheet)')
+})
+
+// 008: la pantalla PÚBLICA de canje (formulario y estado "acceso no válido", escritorio y móvil) y los diálogos de alta y enlace.
+test('008: /primer-acceso (formulario y acceso no válido, escritorio y móvil)', async ({ page }) => {
+  const { token } = await crearUsuarioSinClave(`${PREFIJO}a11y-canje@example.test`, 1)
+  await page.goto(`/primer-acceso#token=${token}`)
+  await expect(page.getByTestId('primer-acceso-form')).toBeVisible()
+  await auditar(page, 'primer acceso: formulario')
+  await page.setViewportSize({ width: 390, height: 800 })
+  await auditar(page, 'primer acceso: formulario (móvil 390px)')
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto('/primer-acceso')
+  await expect(page.getByTestId('acceso-no-valido')).toBeVisible()
+  await auditar(page, 'primer acceso: acceso no válido')
+})
+
+test('008: diálogos de alta de usuario y de enlace de acceso inicial (admin)', async ({ page }) => {
+  await entrarUI(page, ADM)
+  await page.goto('/admin/usuarios')
+  await page.getByTestId('alta-usuario').click()
+  await expect(page.getByTestId('alta-usuario-dialog')).toBeVisible()
+  await auditar(page, 'diálogo: alta de usuario', '[data-testid="alta-usuario-dialog"]')
+  await page.getByTestId('alta-usuario-dialog').getByLabel('Email').fill(`${PREFIJO}a11y-alta@example.test`)
+  await elegir(page, 'alta-provincia', 'Córdoba')
+  await page.getByTestId('alta-usuario-dialog').getByRole('button', { name: 'Dar de alta' }).click()
+  await expect(page.getByTestId('acceso-inicial-dialog')).toBeVisible()
+  await auditar(page, 'diálogo: enlace de acceso inicial', '[data-testid="acceso-inicial-dialog"]')
 })

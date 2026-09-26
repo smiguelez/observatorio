@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
-import { ApiError, http, parsear } from './http'
+import { http, parsear } from './http'
 import { idWire } from './ids'
 
 export interface PoolJueces {
@@ -15,14 +15,6 @@ const PoolWire = z
   .object({ id: idWire, descripcion: z.string().nullable(), total_jueces: z.number().int(), provincia_id: idWire })
   .transform((w): PoolJueces => ({ id: w.id, descripcion: w.descripcion, totalJueces: w.total_jueces, provinciaId: w.provincia_id }))
 
-/** Borrar un pool con asignaciones: el backend responde 500 (FK 23503 sin capturar — brecha G6, `007`). */
-export class PoolEnUsoError extends Error {
-  constructor() {
-    super('No se pudo eliminar el pool: puede estar asignado a otras unidades funcionales.')
-    this.name = 'PoolEnUsoError'
-  }
-}
-
 export async function listarPools(): Promise<PoolJueces[]> {
   return parsear(z.array(PoolWire), await http('/api/pools-jueces'), 'pools-jueces')
 }
@@ -32,16 +24,13 @@ export async function crearPool(datos: { provinciaId: number; descripcion?: stri
 export async function actualizarPool(id: number, datos: { descripcion?: string; totalJueces?: number }): Promise<PoolJueces> {
   return parsear(PoolWire, await http(`/api/pools-jueces/${id}`, { method: 'PATCH', body: datos }), 'pool-jueces')
 }
+/**
+ * Borrar un pool. Con asignaciones a unidades funcionales el backend (007, D16) responde `400 { error }` con un mensaje claro
+ * ("El pool está asignado a unidades funcionales; quitalo de esas asignaciones antes de eliminarlo."): `ApiError.message` YA es
+ * ese texto y se muestra tal cual. El cliente no infiere causas a partir de códigos de error genéricos.
+ */
 export async function eliminarPool(id: number): Promise<void> {
-  try {
-    await http(`/api/pools-jueces/${id}`, { method: 'DELETE' })
-  } catch (e) {
-    // Solo el 500 con SQLSTATE 23503 (violación de FK) significa "pool en uso"; cualquier otro error se propaga.
-    if (e instanceof ApiError && e.status === 500 && (e.cuerpo as { code?: unknown } | undefined)?.code === '23503') {
-      throw new PoolEnUsoError()
-    }
-    throw e
-  }
+  await http(`/api/pools-jueces/${id}`, { method: 'DELETE' })
 }
 
 export const CLAVE_POOLS = ['pools-jueces'] as const

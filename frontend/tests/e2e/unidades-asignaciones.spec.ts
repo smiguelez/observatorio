@@ -149,7 +149,7 @@ test('Editar cantidad y quitar una asignación', async ({ page }) => {
   expect(asignacionesEnBase()).not.toContain(`${PREFIJO}pool A`)
 })
 
-test('Pools: editar el total, eliminar uno libre, y el mensaje claro al eliminar uno EN USO (500 real del backend)', async ({ page }) => {
+test('Pools: editar el total, eliminar uno libre, y el mensaje del servidor al eliminar uno EN USO (400 real de 007)', async ({ page }) => {
   await abrirDialogo(page)
   await page.getByRole('tab', { name: 'Pools de la provincia' }).click()
 
@@ -167,19 +167,34 @@ test('Pools: editar el total, eliminar uno libre, y el mensaje claro al eliminar
   await expect(page.getByTestId('mensaje-pools')).toContainText('Pool eliminado')
   expect(sql(`SELECT count(*) FROM grupos_jueces WHERE descripcion = '${PREFIJO}pool A'`)).toBe('0')
 
-  // Pool B SÍ está asignado a esta UF: el backend responde 500 (FK) y la UI lo traduce.
+  // Pool B SÍ está asignado a esta UF: desde 007 el backend rechaza con 400 y un mensaje propio; la UI lo muestra TAL CUAL.
   const respuestas: { status: number; cuerpo: string }[] = []
   page.on('response', async (r) => {
-    if (r.request().method() === 'DELETE' && r.url().includes('/api/pools-jueces/')) respuestas.push({ status: r.status(), cuerpo: (await r.text()).slice(0, 220) })
+    if (r.request().method() === 'DELETE' && r.url().includes('/api/pools-jueces/')) {
+      // un 204 no tiene cuerpo: leerlo lanzaría en el protocolo
+      const cuerpo = await r.text().catch(() => '')
+      respuestas.push({ status: r.status(), cuerpo: cuerpo.slice(0, 220) })
+    }
   })
   await filaB.getByRole('button', { name: /Eliminar pool/ }).click()
   await page.getByRole('button', { name: 'Eliminar pool', exact: true }).click()
+  const MENSAJE = 'El pool está asignado a unidades funcionales; quitalo de esas asignaciones antes de eliminarlo.'
   const alerta = page.getByTestId('mensaje-pools')
-  await expect(alerta).toContainText('puede estar asignado a otras unidades funcionales')
+  await expect(alerta).toContainText(MENSAJE)
+  await expect(alerta).not.toContainText('puede estar asignado a otras unidades funcionales') // ya no es una inferencia del cliente
   evidencia.borradoPoolEnUso = { respuestaDelBackend: respuestas, mensajeEnPantalla: (await alerta.textContent())?.trim() }
-  expect(respuestas.map((x) => x.status)).toEqual([500])
-  expect(respuestas[0]!.cuerpo).toContain('23503')
+  expect(respuestas.map((x) => x.status)).toEqual([400]) // (el segundo DELETE, ya sin asignación, se verifica más abajo)
+  expect(JSON.parse(respuestas[0]!.cuerpo)).toEqual({ error: MENSAJE })
   expect(sql(`SELECT count(*) FROM grupos_jueces WHERE descripcion = '${PREFIJO}pool B'`)).toBe('1') // no se borró
+  await expect(page.getByTestId('fila-pool').filter({ has: page.locator(`input[value="${PREFIJO}pool B"]`) })).toBeVisible() // sigue en la lista
+
+  // Quitada la asignación, el borrado prospera: el rechazo dependía del dato, no de la ruta.
+  const asignacion = sql(`SELECT id FROM unidad_funcional_grupo_jueces WHERE grupo_jueces_id = (SELECT id FROM grupos_jueces WHERE descripcion = '${PREFIJO}pool B')`)
+  expect((await api.del(`/api/organismos/${orgId}/unidades-funcionales/${ufId}/asignaciones-jueces/${asignacion}`)).status).toBe(204)
+  await filaB.getByRole('button', { name: /Eliminar pool/ }).click()
+  await page.getByRole('button', { name: 'Eliminar pool', exact: true }).click()
+  await expect(alerta).toContainText('Pool eliminado')
+  expect(sql(`SELECT count(*) FROM grupos_jueces WHERE descripcion = '${PREFIJO}pool B'`)).toBe('0')
   // Sin captura acá: esta pantalla muestra datos reales; las imágenes salen de evidencia-visual.spec.ts (anonimizadas).
 })
 

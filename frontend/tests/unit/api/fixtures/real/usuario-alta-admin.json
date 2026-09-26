@@ -1,0 +1,13 @@
+{
+  "id": "2397",
+  "email": "test-frontend-fx-alta-admin@example.test",
+  "provinciaId": null,
+  "roles": [
+    "usuario_normal",
+    "admin"
+  ],
+  "accesoInicial": {
+    "token": "TOKEN-REDACTADO",
+    "vence": "2026-09-27T00:17:31.310Z"
+  }
+}

@@ -61,19 +61,19 @@ usuarios reales.
 la Fase A construye.
 
 - Pantalla de admin para asignar rol y provincia (hoy `US9` es de solo
-  lectura).
-- Pantalla/flujo de alta administrada de usuarios.
+  lectura). **✅ Hecho por `008` (2026-09-26)**: `/admin/usuarios` edita rol y provincia.
+- Pantalla/flujo de alta administrada de usuarios. **✅ Hecho por `008`**: alta + enlace de acceso inicial + reemisión, y la pantalla pública `/primer-acceso` para el canje.
 - Selector de provincia del perfil pasa a solo lectura; mensaje de alta
-  sin provincia cambia a "pedile a un administrador".
+  sin provincia cambia a "pedile a un administrador". **✅ Hecho por `008`** (el admin sigue pudiendo editarla).
 - Re-verificar SC-002 (recorrido de alta en una sola sesión) — el
   recorrido cambia porque un usuario nuevo ya no completa su provincia
-  solo.
+  solo. **✅ Hecho por `008`**: SC-002 redefinido (parte de una persona dada de alta con provincia) y verificado de punta a punta.
 - **T030**: probar Google de punta a punta — bloqueado por una credencial
-  OAuth de desarrollo real, no por código (ver Fase E).
+  OAuth de desarrollo real, no por código (ver Fase E). **Sigue pendiente** (fuera de `008`).
 - Borrado de pool en uso: el frontend traduce hoy el `500`/`23503` a
   `PoolEnUsoError` (`frontend/src/api/pools.ts`), lógica ahora obsoleta
   (D16); debe leer en su lugar el `400 { error, ... }` nuevo del backend —
-  no probado todavía.
+  no probado todavía. **✅ Hecho por `008`**: `PoolEnUsoError` eliminado; se muestra el mensaje del `400`, verificado contra el backend real.
 
 ---
 

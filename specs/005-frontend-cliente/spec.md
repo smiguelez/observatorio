@@ -519,6 +519,10 @@ control activo para modificar roles.
 - **SC-002**: Un usuario nuevo puede dar de alta un organismo y completar
   la taxonomía aplicable en una sola sesión de uso, sin necesitar volver a
   preguntar cómo hacerlo una segunda vez.
+  > **Redefinido por `008-frontend-identidad-fase-b` (2026-09-26).** Tal como estaba escrito y probado, este criterio quedó
+  > invalidado por `007`: un usuario nuevo ya no puede crearse solo ni completar su propia provincia. El recorrido ahora empieza
+  > **después** de que un administrador dio de alta a la persona con su provincia asignada (ver SC-002 de `008`). El texto de arriba
+  > se conserva como historial.
 - **SC-003**: El 100% de las preguntas de taxonomía se muestran con el
   control correcto para su tipo de respuesta, verificado contra los 4
   tipos existentes (opción única, opción múltiple, numérica, texto

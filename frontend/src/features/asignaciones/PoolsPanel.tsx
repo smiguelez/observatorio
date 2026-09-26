@@ -78,7 +78,7 @@ export default function PoolsPanel({ pools, provinciaId, provinciaParaCrear, pue
       await eliminar.mutateAsync(p.id)
       setMensaje({ tipo: 'ok', texto: 'Pool eliminado.' })
     } catch (err) {
-      // PoolEnUsoError: el backend responde 500 si el pool tiene asignaciones (brecha G6).
+      // Un pool con asignaciones se rechaza con `400 { error }` (007, D16): `err.message` es el texto del servidor.
       setMensaje({ tipo: 'error', texto: err instanceof Error ? err.message : 'No se pudo eliminar el pool' })
     }
   }

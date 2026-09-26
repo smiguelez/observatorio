@@ -4,6 +4,7 @@ import AppLayout from '@/components/layout/AppLayout'
 import NoAutorizado from '@/routes/errores/NoAutorizado'
 import NoEncontrado from '@/routes/errores/NoEncontrado'
 import LoginPage from '@/routes/login/LoginPage'
+import PrimerAccesoPage from '@/routes/primer-acceso/PrimerAccesoPage'
 import DatosTab from '@/routes/organismos/DatosTab'
 import OrganismoDetallePage from '@/routes/organismos/OrganismoDetallePage'
 import OrganismoNuevoPage from '@/routes/organismos/OrganismoNuevoPage'
@@ -19,8 +20,11 @@ import AdminUsuariosPage from '@/routes/admin/AdminUsuariosPage'
 
 // Tabla de rutas = contracts/routes.md. NO existen /pools, /registro ni /signup
 // (decisiones 4 y 5): esas URL caen en el comodín `*` (404).
+// 008: `/primer-acceso` es la ÚNICA otra ruta pública (canje del acceso inicial de 007). "Pública" = hermana de `/login`,
+// fuera del subárbol de `RequireAuth`; no hay ninguna excepción en las guardas. Ninguna pantalla enlaza a ella.
 export const rutas: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
+  { path: '/primer-acceso', element: <PrimerAccesoPage /> },
   {
     element: <RequireAuth />,
     children: [

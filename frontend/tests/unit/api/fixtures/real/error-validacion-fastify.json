@@ -1,0 +1,6 @@
+{
+  "statusCode": 400,
+  "code": "FST_ERR_VALIDATION",
+  "error": "Bad Request",
+  "message": "body must have required property 'rol'"
+}

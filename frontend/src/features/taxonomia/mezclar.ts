@@ -63,15 +63,3 @@ export function etiquetaPregunta(p: Pick<PreguntaTaxonomia, 'codigo' | 'texto'>)
   return base.charAt(0).toUpperCase() + base.slice(1)
 }
 export const etiquetaGrupo = (grupo: string) => etiquetaPregunta({ codigo: grupo, texto: grupo })
-
-/**
- * Preguntas a resaltar ante un 400 del PUT. Los mensajes de los triggers identifican la pregunta por su
- * id interno numérico (no por `codigo`; ver backend/migrations/0001..0003), que el cliente no conoce:
- * solo el caso "Pregunta(s) inexistente(s): a, b" trae códigos. En los demás la UI muestra el mensaje
- * completo del servidor sin resaltar ninguna.
- */
-export function preguntasDelError(mensaje: string, catalogo: PreguntaTaxonomia[]): string[] {
-  return catalogo
-    .filter((p) => new RegExp(`(^|[^\\p{L}\\p{N}_])${p.codigo}($|[^\\p{L}\\p{N}_])`, 'u').test(mensaje))
-    .map((p) => p.codigo)
-}

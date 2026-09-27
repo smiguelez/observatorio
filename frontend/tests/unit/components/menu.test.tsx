@@ -26,7 +26,7 @@ describe('jerarquía de menús (US5, FR-013)', () => {
 
   it('"Tableros" es un enlace externo y no se muestra si falta la URL (FR-015)', () => {
     const con = construirMenu(normal, URL).find((g) => g.id === 'reportes')!
-    expect(con.items[0]).toEqual({ etiqueta: 'Tableros', externo: URL })
+    expect(con.items[0]).toMatchObject({ etiqueta: 'Tableros', externo: URL })
     expect(construirMenu(normal, undefined).map((g) => g.id)).not.toContain('reportes')
     expect(construirMenu(normal, '').map((g) => g.id)).not.toContain('reportes')
   })

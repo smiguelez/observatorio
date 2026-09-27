@@ -96,9 +96,20 @@ usuarios hoy, no un envío masivo).
 
 **D2**, nunca abordada: qué reemplaza a Looker Studio y al pipeline hacia
 BigQuery. Es su propio ciclo `specify → plan → tasks → implement`, como
-las anteriores — no depende de A, B, o C, así que puede correr en paralelo
-si hay capacidad, pero no es parte de "cerrar la migración de datos y
-autenticación".
+las anteriores — no depende de A, B, o C, así que puede *empezarse* en
+paralelo con ellas si hay capacidad, pero no es parte de "cerrar la
+migración de datos y autenticación".
+
+**No es una tarea sin apuro: es un bloqueante de la Fase F.** Los
+tableros de DataStudio/Looker Studio que la app ya enlaza (research.md de
+005, Decisión 7 — el ítem "Tableros" del menú) leen hoy de un pipeline
+hacia Firestore. Ese pipeline deja de tener datos el mismo día que Fase F
+apaga Firestore (ver runbook). Por eso el pipeline nuevo desde
+PostgreSQL — y su migración de tableros — **debe estar resuelto antes de
+ejecutar la Fase F**, aunque el trabajo pueda arrancar en paralelo con
+A/B/C. No alcanza con "correr en paralelo si hay capacidad": si para el
+corte no está listo, es una regresión visible (tableros existentes sin
+datos) el mismo día del corte, no un backlog pendiente.
 
 ---
 
@@ -133,6 +144,11 @@ endpoints de auth, Fase B cambia pantallas).
 ---
 
 ## Fase F — Corte a producción
+
+**Prerrequisito, no solo A-C:** la Fase D (pipeline de reporting desde
+PostgreSQL) tiene que estar resuelta antes de este punto — el runbook
+apaga Firestore, y los tableros existentes leen de un pipeline que
+depende de Firestore hoy.
 
 Ejecutar `docs/runbook-corte-produccion.md`, ya escrito: congelar
 Firestore, export fresco, ambiente reproducible, detección de anomalías

@@ -28,6 +28,18 @@ verificados).
 
 ---
 
+## Prerrequisitos antes de arrancar
+
+- **Pipeline de reporting nuevo, desde PostgreSQL, en producción** (Fase D
+  de `docs/plan-camino-a-produccion.md`) — no un ítem de backlog: los
+  tableros de DataStudio/Looker Studio que la app ya enlaza leen hoy de un
+  pipeline hacia Firestore. El paso 1 de abajo apaga Firestore; si el
+  pipeline nuevo no está resuelto para ese momento, los tableros existentes
+  quedan sin datos el mismo día del corte. No se avanza al paso 1 sin esto
+  confirmado.
+
+---
+
 ## Pasos del corte real
 
 1. **Congelar el origen.** Poner Firestore en modo solo lectura (Principio

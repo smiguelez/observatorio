@@ -15,6 +15,7 @@ export default defineConfig({
     // Dev: same-origin hacia el backend (research.md, Decisión 3). NO activar
     // `changeOrigin`: el puente Fastify->Better Auth arma la URL con el Host
     // recibido, que debe coincidir con el Origin del navegador (localhost:5173).
+    allowedHosts: ['reviews-ext-ict-johnny.trycloudflare.com'],
     proxy: {
       '/api': { target: 'http://localhost:3000' },
     },

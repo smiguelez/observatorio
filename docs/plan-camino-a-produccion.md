@@ -86,9 +86,26 @@ de esto y ninguna se puede cerrar sin ella:
   (solicitud de acceso) — no es indispensable ahora, pero magic link sí lo
   es para cualquier uso real del sistema.
 
-Decisión pendiente: proveedor de envío (SMTP propio, servicio gestionado
-tipo SES/Postmark/Resend) — a evaluar con criterio de costo y volumen (47
-usuarios hoy, no un envío masivo).
+Proveedor de envío ya decidido: Resend, capa gratuita (`009-envio-email-autenticacion`).
+
+**Bloqueante — gestión externa, no código (la más urgente de todo el
+plan ahora mismo):** Resend exige un dominio propio verificado desde el
+primer envío real — no hay volumen que lo evite; el dominio de prueba
+(`onboarding@resend.dev`) solo puede entregar al email del dueño de la
+cuenta de Resend, nunca a un usuario real (`009`, research.md, Decisión
+1). Verificarlo implica agregar unos pocos registros DNS (MX + SPF +
+DKIM) en la zona de Cloudflare de `jufejus.org.ar` (ya delegada ahí,
+confirmado) y esperar la propagación (hasta 24hs) — **pero eso requiere
+acceso administrativo a esa cuenta de Cloudflare**, que hoy nadie del
+proyecto tiene confirmado. Es el mismo acceso que también hace falta más
+adelante para el subdominio de la app (Fase E, D5) y para el dominio
+final de las credenciales OAuth de Google (Fase E) — encima, es el que
+más urge de los tres, porque bloquea Fase C ya mismo (el resto de esa
+fase se puede diseñar e implementar sin la API key real, ver `009`, pero
+no se puede *encender* sin el dominio verificado). Conseguir ese acceso
+(o a alguien que lo tenga y pueda cargar los registros) es la gestión
+externa a resolver primero, antes que cualquier otra tarea de código de
+esta fase.
 
 ---
 
@@ -120,7 +137,10 @@ cómo se despliega algo que todavía va a cambiar de forma (Fase A cambia
 endpoints de auth, Fase B cambia pantallas).
 
 - **D5**: decisiones de despliegue — Cloudflare Tunnel o no, dónde vive el
-  frontend en producción (¿el mismo `foros-ubuntu`, u otro servidor?).
+  frontend en producción (¿el mismo `foros-ubuntu`, u otro servidor?). Mismo
+  acceso a la cuenta de Cloudflare de `jufejus.org.ar` que ya hace falta
+  antes, en Fase C, para verificar el dominio de envío de Resend — si se
+  consigue ese acceso para Fase C, ya está disponible acá también.
 - Lista de requerimientos al proveedor de infraestructura (mencionada al
   principio del proyecto, nunca formalizada).
 - Gestión de procesos real — hoy backend y frontend corren con `tsx watch`

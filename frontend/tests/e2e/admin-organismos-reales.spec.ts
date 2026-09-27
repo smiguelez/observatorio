@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs'
 import { crearUsuarioConClave, hacerAdmin, limpiarFixtures, PREFIJO, sql } from './helpers/backend'
 import { entrarUI } from './helpers/ui'
 
-// Re-corrida de la evaluación de completitud (US7) SOLO sobre los organismos reales: no crea ningún
+// Completitud (US7) SOLO sobre los organismos reales (desde 009, calculada por el backend en una consulta SQL agregada): no crea ningún
 // organismo de prueba (solo un usuario admin), así que el universo de la app y el de SQL es la base tal cual.
 const ADM = `${PREFIJO}real-admin@example.test`
 
@@ -19,7 +19,7 @@ test('completitud sobre los organismos reales: app y SQL sobre el mismo universo
   const deFixtures = Number(sql(`SELECT count(*) FROM organismos WHERE denominacion LIKE '${PREFIJO}%'`))
   await entrarUI(page, ADM)
   await page.getByRole('link', { name: 'Gestión de organismos' }).click()
-  await expect(page.getByTestId('resumen-completitud')).toBeVisible({ timeout: 120_000 })
+  await expect(page.getByTestId('resumen-completitud')).toBeVisible({ timeout: 30_000 })
 
   const enUi = await page.getByTestId('fila-completitud').evaluateAll((els) => els.map((e) => [e.getAttribute('data-org-id')!, e.getAttribute('data-estado')!] as const))
   const filas = sql(`SELECT o.id || '|' || (

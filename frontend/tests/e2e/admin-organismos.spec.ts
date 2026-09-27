@@ -39,44 +39,33 @@ test.afterAll(() => {
   writeFileSync(process.env.ADMORG_EVIDENCIA ?? 'test-results/admin-organismos-evidencia.json', JSON.stringify(evidencia, null, 2))
 })
 
-test('20. completitud: estados correctos, progreso visible, concurrencia ≤ 6, y cada fila coincide con la base', async ({ page }) => {
-  // Medición a nivel de aplicación: envuelve fetch y cuenta las llamadas a la API sin resolver. Es lo que
-  // limita la cola (una tarea no pide lo siguiente hasta terminar la anterior). Los eventos de red de
-  // Playwright llegan con un pequeño desfase (una request nueva se ve antes que el `requestfinished` de la
-  // anterior), por eso se informan aparte y no se usan como cota.
-  await page.addInitScript(() => {
-    const w = window as unknown as { __enVuelo: number; __maximo: number }
-    w.__enVuelo = 0
-    w.__maximo = 0
-    ;(w as unknown as { __urls: Set<string>; __enMax: string[] }).__urls = new Set()
-    ;(w as unknown as { __enMax: string[] }).__enMax = []
-    const original = window.fetch.bind(window)
-    window.fetch = async (...args) => {
-      const url = String(args[0] instanceof Request ? args[0].url : args[0])
-      // Solo las llamadas de la evaluación: se excluye la lista `/api/organismos`, que TanStack Query
-      // refetchea en segundo plano al montar (ya estaba en caché desde /organismos) y no forma parte de la cola.
-      const api = url.startsWith('/api/') && !url.startsWith('/api/auth/') && url !== '/api/organismos'
-      const ww = w as unknown as { __urls: Set<string>; __enMax: string[] }
-      if (api) { ww.__urls.add(url); w.__enVuelo++; if (w.__enVuelo > w.__maximo) { w.__maximo = w.__enVuelo; ww.__enMax = [...ww.__urls] } }
-      try { return await original(...args) } finally { if (api) { w.__enVuelo--; ww.__urls.delete(url) } }
-    }
-  })
+test('20. completitud: UNA sola solicitud a la API (no ~3 por organismo), estados correctos y cada fila coincide con la base', async ({ page }) => {
   await entrarUI(page, ADM)
-  let enVuelo = 0, maximo = 0, total = 0
-  page.on('request', (r) => { if (esApi(r.url())) { total++; maximo = Math.max(maximo, ++enVuelo) } })
-  page.on('requestfinished', (r) => { if (esApi(r.url())) enVuelo-- })
-  page.on('requestfailed', (r) => { if (esApi(r.url())) enVuelo-- })
+  // Se espera a que termine lo de la pantalla anterior (la lista de "Mis organismos" y su refetch en segundo plano) para medir SOLO
+  // lo que hace la pantalla de gestión.
+  await expect(page.getByRole('heading', { name: 'Mis organismos' })).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  // Cada llamada a la API real desde que se abre la pantalla (se excluye auth y los módulos del dev server).
+  const llamadas: { metodo: string; ruta: string }[] = []
+  page.on('request', (r) => { if (esApi(r.url())) llamadas.push({ metodo: r.method(), ruta: new URL(r.url()).pathname }) })
 
   const t0 = Date.now()
   await page.getByRole('link', { name: 'Gestión de organismos' }).click()
-  await expect(page.getByTestId('progreso')).toBeVisible()
-  await expect(page.getByTestId('resumen-completitud')).toBeVisible({ timeout: 120_000 })
+  await expect(page.getByTestId('resumen-completitud')).toBeVisible({ timeout: 30_000 })
   const ms = Date.now() - t0
 
   const filas = page.getByTestId('fila-completitud')
   const cantidad = await filas.count()
   const enBase = Number(sql('SELECT count(*) FROM organismos'))
   expect(cantidad).toBe(enBase)
+
+  // 009: ANTES eran ~3 llamadas por organismo (detalle, unidades, taxonomía) + el catálogo por tipo (~341 con 118 organismos).
+  // AHORA es exactamente una: el endpoint agregado. Nada por fila.
+  const completitud = llamadas.filter((l) => l.ruta === '/api/organismos/completitud')
+  const porFila = llamadas.filter((l) => /^\/api\/organismos\/\d+/.test(l.ruta) || l.ruta.startsWith('/api/taxonomia/'))
+  expect(completitud).toEqual([{ metodo: 'GET', ruta: '/api/organismos/completitud' }])
+  expect(porFila).toEqual([])
+  expect(llamadas).toHaveLength(1) // ni siquiera la lista de organismos: la pantalla no necesita nada más
 
   // Los cuatro fixtures, con su estado esperado.
   const estado = (clave: string) => page.locator(`[data-org-id="${ids[clave]}"]`)
@@ -103,20 +92,18 @@ test('20. completitud: estados correctos, progreso visible, concurrencia ≤ 6, 
   const completosSql = [...esperado.values()].filter((v) => v === 'true').length
 
   const resumen = (await page.getByTestId('resumen-completitud').textContent())?.trim()
-  const maximoApp = await page.evaluate(() => (window as unknown as { __maximo: number }).__maximo)
-  evidencia.enVueloAlMaximoDeLaEvaluacion = await page.evaluate(() => (window as unknown as { __enMax: string[] }).__enMax)
-  evidencia.medicion = { organismos: cantidad, requestsDeApi: total, maximoEnVueloSegunLaApp: maximoApp, maximoEnVueloSegunEventosDeRed: maximo, milisegundos: ms, resumen, completosSegunSql: completosSql, discrepanciasUiVsSql: discrepancias }
+  evidencia.medicion = { organismos: cantidad, solicitudesDeApi: llamadas.length, solicitudesPorFila: porFila.length, anteriormenteAprox: cantidad * 3 + 4, milisegundos: ms, resumen, completosSegunSql: completosSql, discrepanciasUiVsSql: discrepancias }
   expect(discrepancias).toBe(0)
   expect(resumen).toContain(`${completosSql} de ${enBase} organismos completos`)
-  expect(maximoApp).toBeLessThanOrEqual(6) // la cola limita a 6 (la lista inicial ya había terminado)
-  expect(maximo).toBeLessThanOrEqual(7) // eventos de red: incluyen el refetch de la lista (+1) y el desfase descrito arriba
   // Sin captura acá: esta pantalla muestra datos reales; las imágenes salen de evidencia-visual.spec.ts (anonimizadas).
 })
 
-test('20b. filtros por estado', async ({ page }) => {
+test('20b. filtros por estado (sobre lo ya cargado: no piden nada más)', async ({ page }) => {
   await entrarUI(page, ADM)
   await page.goto('/admin/organismos')
-  await expect(page.getByTestId('resumen-completitud')).toBeVisible({ timeout: 120_000 })
+  await expect(page.getByTestId('resumen-completitud')).toBeVisible({ timeout: 30_000 })
+  const solicitudes: string[] = []
+  page.on('request', (r) => { if (esApi(r.url())) solicitudes.push(r.url()) })
   const distintos = () =>
     page.getByTestId('fila-completitud').evaluateAll((els) => [...new Set(els.map((e) => e.getAttribute('data-estado')))].sort().join(','))
   const cuantas = () => page.getByTestId('fila-completitud').count()
@@ -132,14 +119,21 @@ test('20b. filtros por estado', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Todos', exact: true }).click()
   await expect.poll(cuantas).toBe(incompletos + completos)
+  expect(solicitudes).toEqual([]) // cambiar de filtro no pide nada al servidor
 })
 
 test('20c. exportar PDF: un archivo válido con la misma información que la pantalla', async ({ page }) => {
+  // La respuesta llega casi al instante: se demora a propósito para verificar que el botón está deshabilitado hasta tener los datos.
+  await page.route('**/api/organismos/completitud', async (route) => {
+    await new Promise((r) => setTimeout(r, 1000))
+    await route.continue()
+  })
   await entrarUI(page, ADM)
   await page.goto('/admin/organismos')
   const boton = page.getByRole('button', { name: 'Exportar PDF' })
-  await expect(boton).toBeDisabled() // hasta terminar de evaluar
-  await expect(page.getByTestId('resumen-completitud')).toBeVisible({ timeout: 120_000 })
+  await expect(boton).toBeDisabled() // hasta tener los datos
+  await expect(page.getByTestId('progreso')).toBeVisible() // indicador de carga mientras espera
+  await expect(page.getByTestId('resumen-completitud')).toBeVisible({ timeout: 30_000 })
   await expect(boton).toBeEnabled()
   const resumen = (await page.getByTestId('resumen-completitud').textContent())!.trim()
   const m = resumen.match(/(\d+) de (\d+) organismos completos/)!

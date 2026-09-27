@@ -1,0 +1,46 @@
+[
+  {
+    "organismoId": "1210",
+    "denominacion": "test-frontend-fx org",
+    "tipoOficinaId": 1,
+    "provinciaId": 1,
+    "datosBasicos": true,
+    "unidades": true,
+    "catalogoVacio": false,
+    "taxonomia": true,
+    "completo": true
+  },
+  {
+    "organismoId": "1211",
+    "denominacion": "test-frontend-fx operativa",
+    "tipoOficinaId": 4,
+    "provinciaId": 1,
+    "datosBasicos": true,
+    "unidades": false,
+    "catalogoVacio": true,
+    "taxonomia": true,
+    "completo": false
+  },
+  {
+    "organismoId": "1212",
+    "denominacion": "test-frontend-fx coordinación",
+    "tipoOficinaId": 3,
+    "provinciaId": 1,
+    "datosBasicos": true,
+    "unidades": true,
+    "catalogoVacio": true,
+    "taxonomia": true,
+    "completo": true
+  },
+  {
+    "organismoId": "1213",
+    "denominacion": "test-frontend-fx sin unidades",
+    "tipoOficinaId": 1,
+    "provinciaId": 1,
+    "datosBasicos": true,
+    "unidades": false,
+    "catalogoVacio": false,
+    "taxonomia": false,
+    "completo": false
+  }
+]

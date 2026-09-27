@@ -26,6 +26,13 @@ async function anonimizar(page: Page) {
     const lista = (await r.json()) as { denominacion: string }[]
     await route.fulfill({ response: r, json: lista.map((o, i) => (esPrueba(o.denominacion) ? o : { ...o, denominacion: `Organismo de ejemplo ${i + 1}` })) })
   })
+  // 009: la pantalla de gestión de organismos ya no usa la lista sino GET /api/organismos/completitud (mismas denominaciones reales).
+  await page.route('**/api/organismos/completitud', async (route) => {
+    if (route.request().method() !== 'GET') return route.continue()
+    const r = await route.fetch()
+    const lista = (await r.json()) as { denominacion: string }[]
+    await route.fulfill({ response: r, json: lista.map((o, i) => (esPrueba(o.denominacion) ? o : { ...o, denominacion: `Organismo de ejemplo ${i + 1}` })) })
+  })
   await page.route('**/api/pools-jueces', async (route) => {
     if (route.request().method() !== 'GET') return route.continue()
     const r = await route.fetch()
@@ -62,7 +69,7 @@ test('captura: completitud de organismos (admin), datos anonimizados', async ({ 
   await anonimizar(page)
   await entrarUI(page, ADM)
   await page.getByRole('link', { name: 'Gestión de organismos' }).click()
-  await expect(page.getByTestId('resumen-completitud')).toBeVisible({ timeout: 120_000 })
+  await expect(page.getByTestId('resumen-completitud')).toBeVisible({ timeout: 30_000 })
   const nombres = await page.getByTestId('fila-completitud').evaluateAll((f) => f.map((e) => e.querySelector('td a')!.textContent!))
   expect(nombres.length).toBe(Number(sql('SELECT count(*) FROM organismos')))
   expect(nombres.every((n) => /^Organismo de ejemplo \d+$/.test(n) || n.startsWith('test-frontend-'))).toBe(true)

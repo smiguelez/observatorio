@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import type { FilaCompletitud } from './evaluar'
+import type { FilaCompletitud } from '@/api/completitud'
 
 export const CABECERA_PDF = ['Organismo', 'Datos básicos', 'Unidades funcionales', 'Taxonomía', 'Estado']
 

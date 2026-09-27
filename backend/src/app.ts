@@ -15,6 +15,7 @@ import { loadPort } from './config/env.js'
 import { aHeadersWeb } from './http/headers.js'
 import { registrarRutasAuth } from './routes/auth.js'
 import { registrarRutasOrganismos } from './routes/organismos.js'
+import { registrarRutasCompletitud } from './routes/completitud.js'
 import { registrarRutasPoolsJueces } from './routes/pools-jueces.js'
 import { registrarRutasUsuarios } from './routes/usuarios.js'
 import { registrarRutasAccesoInicial } from './routes/acceso-inicial.js'
@@ -47,6 +48,10 @@ export async function buildApp(opciones: { logStream?: NodeJS.WritableStream } =
 
   // T022/T024 (US2): CRUD de organismos + subrutas de UF/taxonomía.
   await app.register(registrarRutasOrganismos)
+
+  // 009: completitud de todos los organismos en una sola consulta (reemplaza ~3 solicitudes por organismo del cliente).
+  // Ruta estática: tiene prioridad sobre `/api/organismos/:id`.
+  await app.register(registrarRutasCompletitud)
 
   // T028 (US3): CRUD de pools de jueces, scoping por provincia.
   await app.register(registrarRutasPoolsJueces)

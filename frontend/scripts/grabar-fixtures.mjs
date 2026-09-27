@@ -2,6 +2,7 @@
 // de la capa de mapeo, D13). Uso (backend corriendo con BETTER_AUTH_URL=http://localhost:5173):
 //   DATABASE_URL=... node scripts/grabar-fixtures.mjs           # solo los fixtures de 007 (Fase B)
 //   DATABASE_URL=... node scripts/grabar-fixtures.mjs --todos   # además regraba los de 005 (pisa los existentes)
+//   DATABASE_URL=... node scripts/grabar-fixtures.mjs --solo-completitud   # solo `completitud.json` (009)
 // Desde 007 no existe el alta pública por contraseña: los usuarios se dan de alta por el flujo administrado
 // (alta + canje). El ÚNICO arranque por SQL es el admin de fixtures (mismo criterio que tests/e2e/helpers/backend.ts).
 // Crea usuarios/organismos con prefijo `test-frontend-` y los BORRA al terminar. Los datos de usuarios
@@ -150,7 +151,15 @@ try {
   console.log('estados HTTP de las capturas de 007:', JSON.stringify(estados))
   const esperados = { alta: 201, reemitido: 201, canje: 200, rol: 200, dup: 400, canjeInvalido: 400, canjeCorto: 400, validacion: 400, poolEnUso: 400, taxError: 400 }
   for (const [k, v] of Object.entries(esperados)) if (estados[k] !== v) throw new Error(`captura ${k}: esperaba ${v}, llegó ${estados[k]}`)
-  const aGrabar = process.argv.includes('--todos') ? { ...grabaciones, ...nuevas } : nuevas
+  // 009: GET /api/organismos/completitud. El usuario de fixtures solo ve SUS organismos (no se graba ningún dato real): uno completo,
+  // uno de un tipo sin preguntas aplicables (coordinación, con UF y 0 respuestas => completo) y uno sin unidades funcionales.
+  const orgCoord = (await llamar('POST', '/api/organismos', { denominacion: `${P} coordinación`, denominacionSimplificadaId: 1, tipoOficinaId: 3, provinciaId: 1 })).json
+  await llamar('POST', `/api/organismos/${orgCoord.id}/unidades-funcionales`, { denominacionUnidad: 'uf fx', localidadId: Number(localidad), tipoUfId: 1 })
+  await llamar('POST', '/api/organismos', { denominacion: `${P} sin unidades`, denominacionSimplificadaId: 1, tipoOficinaId: 1, provinciaId: 1 })
+  const completitudResp = await llamar('GET', '/api/organismos/completitud')
+  if (completitudResp.status !== 200 || completitudResp.json.length < 3) throw new Error(`completitud: esperaba 200 con al menos 3 filas, llegó ${completitudResp.status} ${JSON.stringify(completitudResp.json).slice(0, 120)}`)
+  const completitudFx = { completitud: completitudResp.json }
+  const aGrabar = process.argv.includes('--solo-completitud') ? completitudFx : process.argv.includes('--todos') ? { ...grabaciones, ...nuevas, ...completitudFx } : { ...nuevas, ...completitudFx }
   for (const [nombre, valor] of Object.entries(aGrabar)) guardar(nombre, valor)
   console.log('grabados:', Object.keys(aGrabar).length, 'archivos en', OUT)
 } finally {

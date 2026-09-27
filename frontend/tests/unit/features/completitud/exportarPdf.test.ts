@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FilaCompletitud } from '@/features/completitud/evaluar'
+import type { FilaCompletitud } from '@/api/completitud'
 import { CABECERA_PDF, filasParaPdf, generarPdf } from '@/features/completitud/exportarPdf'
 
 const fila = (o: Partial<FilaCompletitud>): FilaCompletitud => ({

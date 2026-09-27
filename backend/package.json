@@ -14,7 +14,8 @@
     "test": "vitest run",
     "spike:identity": "tsx scripts/spike-identity.ts",
     "migrate:auth": "tsx scripts/migrate-auth.ts",
-    "migrate:public": "tsx scripts/migrate-public.ts"
+    "migrate:public": "tsx scripts/migrate-public.ts",
+    "normalizar:denominaciones": "tsx scripts/normalizar-denominaciones.ts"
   },
   "dependencies": {
     "@fastify/cookie": "11.0.2",

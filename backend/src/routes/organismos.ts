@@ -18,6 +18,7 @@ import { conTransaccion } from '../db/transaction.js'
 import { ErrorNegocio } from '../http/errores-integridad.js'
 import { esAdmin } from '../authz/rules.js'
 import { buscarOrganismoParaAutorizar, puedeGestionarOrganismo } from '../authz/organismos.js'
+import { normalizarDenominacion } from '../util/denominaciones.js'
 
 const CrearOrganismoBody = Type.Object({
   denominacion: Type.String({ minLength: 1 }),
@@ -140,7 +141,14 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
             propietario_id, estado_fueros, actualizado_a, firestore_id)
          VALUES ($1, $2, $3, $4, $5, 'sin_fueros_asignados', now(), $6)
          RETURNING id, denominacion, propietario_id`,
-        [denominacion, denominacionSimplificadaId, tipoOficinaId, provinciaId, identidad.usuarioId, firestoreIdSintetico],
+        [
+          normalizarDenominacion(denominacion),
+          denominacionSimplificadaId,
+          tipoOficinaId,
+          provinciaId,
+          identidad.usuarioId,
+          firestoreIdSintetico,
+        ],
       )
       reply.code(201)
       return rows[0]
@@ -210,7 +218,13 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
              actualizado_a = now()
            WHERE id = $1
            RETURNING id, denominacion, propietario_id`,
-          [id, denominacion ?? null, denominacionSimplificadaId ?? null, tipoOficinaId ?? null, provinciaId ?? null],
+          [
+            id,
+            denominacion !== undefined ? normalizarDenominacion(denominacion) : null,
+            denominacionSimplificadaId ?? null,
+            tipoOficinaId ?? null,
+            provinciaId ?? null,
+          ],
         )
         return rows[0]
       }
@@ -284,7 +298,7 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
          RETURNING *`,
         [
           orgId,
-          denominacionUnidad,
+          normalizarDenominacion(denominacionUnidad),
           localidadId,
           tipoUfId,
           anioImplementacion ?? null,
@@ -337,7 +351,7 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
         [
           ufId,
           orgId,
-          b.denominacionUnidad ?? null,
+          b.denominacionUnidad !== undefined ? normalizarDenominacion(b.denominacionUnidad) : null,
           b.localidadId ?? null,
           b.tipoUfId ?? null,
           b.anioImplementacion ?? null,

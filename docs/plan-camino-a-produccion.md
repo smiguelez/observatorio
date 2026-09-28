@@ -74,6 +74,20 @@ la Fase A construye.
   `PoolEnUsoError` (`frontend/src/api/pools.ts`), lógica ahora obsoleta
   (D16); debe leer en su lugar el `400 { error, ... }` nuevo del backend —
   no probado todavía. **✅ Hecho por `008`**: `PoolEnUsoError` eliminado; se muestra el mensaje del `400`, verificado contra el backend real.
+- **Pendiente, no depende de la Fase A** (a diferencia del resto de esta
+  lista): CRUD de `organismo_fueros` — el listado de fueros concretos que
+  asiste un organismo (D3: es lo que calcula `fuero_simplificado`). La app
+  actual lo tiene (Sección 1 original, 1.2.1.4); `005-frontend-cliente`
+  solo llegó a mostrar `fuero_simplificado` como dato de **solo lectura**
+  (`DatosTab.tsx`, `data-testid="fuero-solo-lectura"`), sin pantalla para
+  editar el listado en sí. Confirmado también del lado del backend: existe
+  `GET /api/organismos/:orgId/fuero`, pero ningún `POST`/`PUT` sobre
+  `organismo_fueros` — falta ese endpoint además de la pantalla. No es un
+  ítem nuevo del backlog: es traducción pendiente de la app actual, con el
+  mismo peso que cualquier otra pantalla de `005`. Por tocar backend
+  (endpoint nuevo) y frontend (pantalla nueva), evaluar si conviene una
+  mini-feature aparte en vez de sumarlo a una spec existente, una vez que
+  se revise la forma real del endpoint que hace falta.
 
 ---
 

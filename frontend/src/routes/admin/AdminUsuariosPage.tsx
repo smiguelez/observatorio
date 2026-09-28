@@ -37,7 +37,7 @@ export default function AdminUsuariosPage() {
     setErrorAcceso(null)
     try {
       const nuevo = await emitir.mutateAsync(u.id)
-      setAcceso({ enlace: construirEnlace(nuevo.token), vence: nuevo.vence, email: u.email })
+      setAcceso({ enlace: construirEnlace(nuevo.token), vence: nuevo.vence, email: u.email, usuarioId: u.id })
       emitir.reset()
     } catch (e) {
       setErrorAcceso(e instanceof Error ? e.message : 'No se pudo emitir el acceso')

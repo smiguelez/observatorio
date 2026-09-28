@@ -4,6 +4,8 @@ import { asignarProvincia, crearUsuarioConClave, limpiarFixtures, PREFIJO, sesio
 import { elegir, entrarUI } from './helpers/ui'
 
 const U = `${PREFIJO}uf@example.test`
+// El backend normaliza `denominacion_unidad` al guardar (backend/src/util/denominaciones.ts).
+const CAP = PREFIJO[0]!.toUpperCase() + PREFIJO.slice(1)
 const evidencia: Record<string, unknown> = {}
 let api: ApiSesion
 let orgId: string
@@ -48,7 +50,7 @@ test('UF: alta, listado y edición (US4-1)', async ({ page }) => {
   await page.getByRole('button', { name: 'Crear unidad funcional' }).click()
   await expect(page).toHaveURL(/unidades-funcionales\/\d+$/)
   ufId = page.url().match(/unidades-funcionales\/(\d+)$/)![1]!
-  expect(sql(`SELECT denominacion_unidad FROM unidades_funcionales WHERE id = ${ufId}`)).toBe(`${PREFIJO}uf 1`)
+  expect(sql(`SELECT denominacion_unidad FROM unidades_funcionales WHERE id = ${ufId}`)).toBe(`${CAP}uf 1`)
   // La localidad elegida pertenece a la provincia del organismo.
   expect(sql(`SELECT l.provincia_id FROM unidades_funcionales u JOIN localidades l ON l.id=u.localidad_id WHERE u.id = ${ufId}`)).toBe('1')
 
@@ -109,7 +111,7 @@ test('Grupo exclusivo: se crea el pool y se asigna en un paso; cantidad > total 
   await page.getByLabel('Jueces del grupo').fill('4')
   await page.getByRole('button', { name: 'Agregar asignación' }).click()
   await expect(page.getByTestId('fila-asignacion')).toHaveCount(3)
-  expect(sql(`SELECT descripcion || ':' || total_jueces FROM grupos_jueces WHERE descripcion = 'Grupo exclusivo de ${PREFIJO}uf 1'`)).toBe(`Grupo exclusivo de ${PREFIJO}uf 1:4`)
+  expect(sql(`SELECT descripcion || ':' || total_jueces FROM grupos_jueces WHERE descripcion = 'Grupo exclusivo de ${CAP}uf 1'`)).toBe(`Grupo exclusivo de ${CAP}uf 1:4`)
 
   await page.getByLabel('Subconjunto de un pool').click()
   await elegir(page, 'asig-pool', new RegExp(`${PREFIJO}pool C`))

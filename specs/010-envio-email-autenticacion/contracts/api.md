@@ -1,70 +1,48 @@
-# Contratos: envío de email para acceso (009)
+# Contratos: envío de email para acceso (010)
 
-Los dos endpoints ya existen (007/008); esta feature solo les agrega un
-campo opcional al body y un campo a la respuesta. Nada de lo que ya
-funciona hoy cambia de forma si el body nuevo no se manda.
+`POST /api/usuarios` y `POST /api/usuarios/:id/acceso-inicial` (alta y
+reemisión, 007/008) **no cambian de forma** — la opción de enviar por
+email es un endpoint nuevo, que actúa sobre el acceso YA generado por
+cualquiera de los dos anteriores (research.md, Decisión 4, corregida
+durante la implementación).
 
-## `POST /api/usuarios` — alta administrada (US2)
+## `POST /api/usuarios/:id/acceso-inicial/enviar-email` — NUEVO (US2)
 
-**Body** (agrega `enviarPorEmail`, opcional, default `false`):
+Envía por email el acceso inicial **vigente** de ese usuario (el que
+generó la alta o la última reemisión) — no genera uno nuevo, no invalida
+el anterior. Solo admin.
 
-```json
-{
-  "email": "persona@example.com",
-  "rol": "usuario_normal",
-  "provinciaId": 5,
-  "nombreDisplay": "Nombre Apellido",
-  "enviarPorEmail": true
-}
-```
+**Body**: ninguno.
 
-**Respuesta 201** (agrega `emailEnviado` dentro de `accesoInicial`, solo
-presente si se pidió `enviarPorEmail: true`):
+**Respuesta 200** (éxito de envío):
 
 ```json
-{
-  "id": 42,
-  "email": "persona@example.com",
-  "...": "resto de campos ya existentes, sin cambios",
-  "accesoInicial": {
-    "token": "…",
-    "vence": "2026-09-28T12:00:00.000Z",
-    "emailEnviado": true
-  }
-}
+{ "emailEnviado": true }
 ```
 
-- Si `enviarPorEmail` no viene o es `false`: `accesoInicial` queda exactamente
-  igual que hoy, sin el campo `emailEnviado` — ningún consumidor existente
-  del contrato se rompe.
-- Si `enviarPorEmail: true` y el envío falla: `emailEnviado: false`. El
-  `token`/`vence` **siempre** están presentes, se haya pedido el email o
-  no, y haya fallado o no — el admin nunca pierde la posibilidad de copiar
-  el enlace a mano (FR-005/FR-007).
-- El fallo de envío **MUST NOT** convertirse en un error HTTP del alta: el
-  usuario y su acceso inicial ya se crearon correctamente: la respuesta
-  sigue siendo `201`, con `emailEnviado: false` como único indicio del
-  fallo.
-
-## `POST /api/usuarios/:id/acceso-inicial` — reemisión (US2)
-
-Mismo criterio, mismo campo nuevo en el body y en la respuesta:
-
-**Body**:
+**Respuesta 200** (envío intentado, pero falló):
 
 ```json
-{ "enviarPorEmail": true }
+{ "emailEnviado": false }
 ```
 
-**Respuesta 201**:
+**Respuesta 404** (no hay ningún acceso inicial vigente para ese usuario —
+nunca se emitió uno, o el que había ya venció o ya se canjeó):
 
 ```json
-{
-  "token": "…",
-  "vence": "2026-09-28T12:00:00.000Z",
-  "emailEnviado": true
-}
+{ "error": "No hay un acceso inicial vigente para este usuario." }
 ```
+
+- El fallo de **envío** (proveedor caído, etc.) **MUST NOT** ser un error
+  HTTP: sigue siendo `200`, con `emailEnviado: false` — el enlace no se
+  toca, "Copiar enlace" en la misma pantalla sigue funcionando exactamente
+  igual (FR-007).
+- El **404** es distinto: no es un fallo de envío, es que no hay nada que
+  enviar (caso borde, no el camino esperado — el botón normalmente se
+  ofrece justo después de generar el acceso).
+- Nunca recibe el token en el body: lo resuelve del lado del servidor
+  contra la fila vigente en `auth.verification` (mismo criterio que ya usa
+  `emitirAccesoInicial` para invalidar la anterior).
 
 ## `POST /sign-in/magic-link` (Better Auth) — sin cambio de contrato (US1)
 

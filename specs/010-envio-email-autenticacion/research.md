@@ -1,4 +1,4 @@
-# Research: envío de email para acceso (009)
+# Research: envío de email para acceso (010)
 
 ## Decisión 1 — El dominio de prueba de Resend NO alcanza; hace falta un dominio propio verificado
 
@@ -144,26 +144,45 @@ prueba puntual fallaría con 403 igual) — se marca así de explícito en
 
 ## Decisión 4 — Forma de la opción "enviar por email" en alta/reemisión (US2)
 
-**Fuente**: código real — `backend/src/routes/usuarios.ts` (alta ya emite
-el acceso inicial en la misma respuesta del `POST /api/usuarios`;
-reemisión ya es su propio `POST .../acceso-inicial` que devuelve token +
-vencimiento), `frontend/src/routes/admin/AltaUsuarioDialog.tsx`
-(`AccesoInicialDialog` ya es el componente compartido entre alta y
-reemisión).
+**Corregida durante la implementación** (tasks.md, al llegar a T013): la
+versión original de esta decisión (campo `enviarPorEmail` en el body de
+alta/reemisión) quedó descartada al confrontarla con el propio
+Acceptance Scenario 1 de la Historia 2 en `spec.md`: "ve la pantalla **con
+el acceso recién generado** ... ve tanto la opción de copiarlo a mano como
+la opción de enviarlo por email ... una junto a la otra" — describe las
+dos opciones sobre un enlace que **ya existe**, en la pantalla que ya lo
+muestra (`AccesoInicialDialog`), no una casilla a tildar antes de enviar el
+formulario de alta. Se corrige acá para no dejar la spec y la
+implementación desalineadas.
 
-**Decisión.** Los dos endpoints existentes (`POST /api/usuarios`, `POST
-/api/usuarios/:id/acceso-inicial`) ganan un campo opcional en el body
-(`enviarPorEmail?: boolean`). El token y su vencimiento **siempre** se
-devuelven igual que hoy (así "copiar enlace" sigue disponible siempre,
-FR-005); si se pidió el envío, la respuesta suma el resultado
-(`emailEnviado: true | false`) en el mismo viaje de ida y vuelta — sin
-segundo endpoint, sin nada asíncrono. El componente compartido
-(`AccesoInicialDialog`) ya es el lugar natural para mostrar las dos
-opciones una vez (alta y reemisión comparten esta pantalla hoy).
+**Fuente**: código real — `backend/src/auth/acceso-inicial.ts`
+(`emitirAccesoInicial` guarda el token en `auth.verification` como
+`reset-password:<token>` con `value = usuarioId`, un solo registro vigente
+por usuario — la misma fila que ya usa `canjearAccesoInicial`),
+`frontend/src/routes/admin/AltaUsuarioDialog.tsx` (`AccesoInicialDialog` ya
+es el componente compartido entre alta y reemisión, y ya tiene el enlace y
+el email en `AccesoParaMostrar`).
+
+**Decisión.** Un endpoint nuevo, admin-only: `POST
+/api/usuarios/:id/acceso-inicial/enviar-email`. No recibe el token en el
+body — lo busca del lado del servidor (la fila `reset-password:%` vigente
+para ese `usuarioId`, mismo criterio que ya usa `emitirAccesoInicial` para
+invalidar la anterior), arma el enlace y llama a `enviarEmail(...)`
+(T005). Devuelve `{ emailEnviado: boolean }`. El botón "Enviar por email"
+de `AccesoInicialDialog` llama a este endpoint con el `usuarioId` que ya
+tiene en mano (sumado a `AccesoParaMostrar`); "Copiar enlace" sigue
+actuando enteramente del lado del cliente, sin llamar al servidor,
+exactamente igual que hoy.
+
+**Por qué no reemitir un acceso nuevo para enviarlo:** reemitir invalida
+el anterior (FR-019) — si el admin ya mostró/copió el enlace y después
+prueba "enviar por email", reemitir de nuevo rompería un enlace que
+todavía podría estar circulando. Enviar el que YA está vigente evita eso.
 
 **Alternativas evaluadas.**
 
 | Opción | Resultado |
 |---|---|
-| **Campo opcional en el body de los endpoints ya existentes** (elegida) | Un solo viaje de ida y vuelta; el token sigue siempre presente; no hay estado intermedio que sincronizar entre "se generó" y "se envió". |
-| Endpoint nuevo `.../acceso-inicial/enviar-email` | Descartada: indirección innecesaria — el admin ya dispara una sola acción (alta o reemisión); pedirle un segundo paso para el envío no aporta nada que el campo opcional no resuelva. |
+| **Endpoint nuevo `.../acceso-inicial/enviar-email`, sin token en el body** (elegida) | Coincide con el Acceptance Scenario 1 (dos acciones sobre el mismo enlace ya generado); no reemite ni invalida nada; el token nunca vuelve a viajar desde el cliente. |
+| Campo opcional en el body de alta/reemisión (versión original de esta decisión) | Descartada tras confrontarla con `spec.md`: obligaría a decidir el envío ANTES de ver el enlace generado, lo que no es lo que describen los Acceptance Scenarios. |
+| Reemitir con un flag `enviarPorEmail` | Descartada: invalidaría un enlace que el admin ya podría haber copiado o mostrado — contradice FR-007 ("sin perder el enlace ya generado"). |

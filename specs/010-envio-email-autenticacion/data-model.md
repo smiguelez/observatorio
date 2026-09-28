@@ -1,4 +1,4 @@
-# Data Model: envío de email para acceso (009)
+# Data Model: envío de email para acceso (010)
 
 No hay entidades nuevas persistidas (research.md, Decisión 2: sin tabla de
 auditoría por ahora). Lo único nuevo es conceptual, en memoria durante un

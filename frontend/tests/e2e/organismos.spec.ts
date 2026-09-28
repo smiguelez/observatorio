@@ -10,6 +10,8 @@ const B = `${PREFIJO}org-b@example.test`
 const SIN_PROV = `${PREFIJO}org-sinprov@example.test`
 const ADMIN = `${PREFIJO}org-admin@example.test`
 const evidencia: Record<string, unknown> = {}
+// El backend normaliza `denominacion` al guardar (backend/src/util/denominaciones.ts).
+const CAP = PREFIJO[0]!.toUpperCase() + PREFIJO.slice(1)
 
 test.describe.configure({ mode: 'serial' })
 
@@ -44,7 +46,8 @@ test('7. alta (usuario_normal): provincia fija, aparece en la lista sin recargar
   await elegir(page, 'denominacionSimplificadaId', /./)
   await elegir(page, 'tipoOficinaId', 'oficina judicial')
   await page.getByRole('button', { name: 'Crear organismo' }).click()
-  await expect(page.getByTestId('titulo-organismo')).toHaveText(`${PREFIJO}org de A`)
+  // "a" es una preposición que queda en minúscula salvo que sea la primera palabra.
+  await expect(page.getByTestId('titulo-organismo')).toHaveText(`${CAP}org de a`)
   await expect(page.getByTestId('fuero-solo-lectura')).toContainText('Sin fuero asignado')
 
   // Sin recargar la página: volver por el historial de la SPA (navegación de documento único,
@@ -79,7 +82,7 @@ test('9. admin: provincia editable en el alta y en la edición', async ({ page }
   await elegir(page, 'denominacionSimplificadaId', /./)
   await elegir(page, 'tipoOficinaId', 'oficina judicial')
   await page.getByRole('button', { name: 'Crear organismo' }).click()
-  await expect(page.getByTestId('titulo-organismo')).toHaveText(`${PREFIJO}org de admin`)
+  await expect(page.getByTestId('titulo-organismo')).toHaveText(`${CAP}org de Admin`)
 
   const id = page.url().match(/organismos\/(\d+)/)![1]
   const antes = sql(`SELECT provincia_id FROM organismos WHERE id = ${id}`)

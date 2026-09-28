@@ -1,8 +1,8 @@
 # Implementation Plan: Envío de email para acceso
 
-**Branch**: `009-envio-email-autenticacion` | **Date**: 2026-09-27 | **Spec**: [spec.md](./spec.md)
+**Branch**: `010-envio-email-autenticacion` | **Date**: 2026-09-27 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `/specs/009-envio-email-autenticacion/spec.md`
+**Input**: Feature specification from `/specs/010-envio-email-autenticacion/spec.md`
 
 ## Summary
 
@@ -61,7 +61,7 @@ credencial hardcodeada, ni un log con datos sensibles. Sigue sin violaciones.
 ### Documentation (this feature)
 
 ```text
-specs/009-envio-email-autenticacion/
+specs/010-envio-email-autenticacion/
 ├── plan.md              # This file
 ├── research.md          # Phase 0 output
 ├── data-model.md        # Phase 1 output

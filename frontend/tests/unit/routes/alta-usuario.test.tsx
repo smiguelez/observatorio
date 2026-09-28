@@ -12,7 +12,9 @@ const TOKEN_REAL_FORMA = 'tok-super-secreto-de-prueba-0123456789'
 afterEach(() => vi.unstubAllGlobals())
 
 interface Llamada { url: string; init?: RequestInit }
-function stub(respuestaAlta: { status: number; cuerpo: unknown }) {
+// 010 (US2): `respuestaEnvio` es opcional — los tests de alta que no la tocan no llaman nunca a
+// `/acceso-inicial/enviar-email`, así que no hace falta configurarla para ellos.
+function stub(respuestaAlta: { status: number; cuerpo: unknown }, respuestaEnvio?: { status: number; cuerpo: unknown }) {
   const llamadas: Llamada[] = []
   vi.stubGlobal(
     'fetch',
@@ -20,10 +22,16 @@ function stub(respuestaAlta: { status: number; cuerpo: unknown }) {
       llamadas.push({ url, init })
       if (url === '/api/provincias') return new Response(JSON.stringify([{ id: 3, nombre: 'Buenos Aires' }, { id: 6, nombre: 'Córdoba' }]), { status: 200 })
       if (url === '/api/usuarios' && init?.method === 'POST') return new Response(JSON.stringify(respuestaAlta.cuerpo), { status: respuestaAlta.status })
+      if (url.endsWith('/acceso-inicial/enviar-email') && init?.method === 'POST' && respuestaEnvio) {
+        return new Response(JSON.stringify(respuestaEnvio.cuerpo), { status: respuestaEnvio.status })
+      }
       return new Response('[]', { status: 200 })
     }),
   )
-  return { altas: () => llamadas.filter((l) => l.url === '/api/usuarios' && l.init?.method === 'POST') }
+  return {
+    altas: () => llamadas.filter((l) => l.url === '/api/usuarios' && l.init?.method === 'POST'),
+    envios: () => llamadas.filter((l) => l.url.endsWith('/acceso-inicial/enviar-email')),
+  }
 }
 
 function Envoltorio() {
@@ -114,6 +122,41 @@ describe('alta administrada (US1)', () => {
     await u.click(screen.getByTestId('cerrar-acceso'))
     await waitFor(() => expect(screen.queryByTestId('enlace-acceso')).not.toBeInTheDocument())
     expect(screen.queryByTestId('confirmar-cierre-acceso')).not.toBeInTheDocument()
+  })
+
+  it('enviar por email exitoso: aviso de éxito, y "Copiar enlace" sigue funcionando después (US2)', async () => {
+    const red = stub({ status: 201, cuerpo: conToken(alta) }, { status: 200, cuerpo: { emailEnviado: true } })
+    const { u } = montar()
+    await u.type(screen.getByLabelText('Email'), 'persona@ejemplo.test')
+    await elegirProvincia(u, 'Buenos Aires')
+    await u.click(screen.getByRole('button', { name: 'Dar de alta' }))
+    await screen.findByTestId('enlace-acceso')
+
+    await u.click(screen.getByTestId('enviar-por-email'))
+    expect(await screen.findByTestId('email-enviado')).toHaveTextContent('Enviado por email')
+    expect(red.envios()).toHaveLength(1)
+    expect(red.envios()[0]!.url).toBe(`/api/usuarios/${alta.id}/acceso-inicial/enviar-email`)
+
+    // El enlace sigue disponible: copiar sigue andando después de un envío exitoso.
+    await u.click(screen.getByTestId('copiar-enlace'))
+    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/primer-acceso#token=${TOKEN_REAL_FORMA}`)
+  })
+
+  it('enviar por email fallido: aviso de fallo, el enlace no se pierde y "Copiar enlace" sigue funcionando (FR-007)', async () => {
+    stub({ status: 201, cuerpo: conToken(alta) }, { status: 200, cuerpo: { emailEnviado: false } })
+    const { u } = montar()
+    await u.type(screen.getByLabelText('Email'), 'persona@ejemplo.test')
+    await elegirProvincia(u, 'Córdoba')
+    await u.click(screen.getByRole('button', { name: 'Dar de alta' }))
+    await screen.findByTestId('enlace-acceso')
+
+    await u.click(screen.getByTestId('enviar-por-email'))
+    expect(await screen.findByTestId('email-no-enviado')).toHaveTextContent('El enlace sigue disponible')
+    // El enlace del input no cambió: sigue siendo el mismo ya generado.
+    expect((screen.getByTestId('enlace-acceso') as HTMLInputElement).value).toBe(`${window.location.origin}/primer-acceso#token=${TOKEN_REAL_FORMA}`)
+
+    await u.click(screen.getByTestId('copiar-enlace'))
+    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/primer-acceso#token=${TOKEN_REAL_FORMA}`)
   })
 
   it('email ya dado de alta: se muestra el mensaje del servidor y NO se da el alta por hecha (FR-006)', async () => {

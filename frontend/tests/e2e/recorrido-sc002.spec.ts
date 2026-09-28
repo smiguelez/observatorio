@@ -13,6 +13,10 @@ const ADM = `${PREFIJO}sc002-admin@example.test`
 const U = `${PREFIJO}sc002@example.test`
 const evidencia: Record<string, unknown> = {}
 const NUEVA_CLAVE = `${CLAVE}-sc002`
+// El backend normaliza `denominacion` al guardar (ver `backend/src/util/denominaciones.ts`): el
+// prefijo de fixtures ("test-frontend-...") es un único token (sin espacios), así que solo se le
+// capitaliza la primera letra; "del" es la única preposición del texto y queda en minúscula.
+const DENOMINACION_ESPERADA = 'Test-frontend-organismo del Recorrido'
 
 test.beforeAll(async () => {
   limpiarFixtures()
@@ -65,7 +69,7 @@ test('SC-002 (008): persona dada de alta con provincia => canje, alta de organis
   await elegir(page, 'denominacionSimplificadaId', /./); acciones.push('denominación simplificada')
   await elegir(page, 'tipoOficinaId', 'oficina judicial'); acciones.push('tipo de oficina')
   await page.getByRole('button', { name: 'Crear organismo' }).click()
-  await expect(page.getByTestId('titulo-organismo')).toHaveText(`${PREFIJO}organismo del recorrido`)
+  await expect(page.getByTestId('titulo-organismo')).toHaveText(DENOMINACION_ESPERADA)
   const idOrg = page.url().match(/organismos\/(\d+)/)![1]!
 
   // --- 2. Taxonomía: llega con un clic desde el detalle y NO vuelve a pedir datos del organismo ---
@@ -90,7 +94,7 @@ test('SC-002 (008): persona dada de alta con provincia => canje, alta de organis
   // --- Resultado: todo quedó guardado, en una sola sesión, con la provincia que asignó el admin ---
   const org = sql(`SELECT o.denominacion || '|' || p.nombre || '|' || u.email FROM organismos o JOIN provincias p ON p.id = o.provincia_id JOIN usuarios u ON u.id = o.propietario_id WHERE o.id = ${idOrg}`)
   const respuestas = Number(sql(`SELECT count(*) FROM evaluaciones_taxonomicas WHERE organismo_id = ${idOrg}`))
-  expect(org).toBe(`${PREFIJO}organismo del recorrido|Córdoba|${U}`)
+  expect(org).toBe(`${DENOMINACION_ESPERADA}|Córdoba|${U}`)
   expect(respuestas).toBe(9)
   // 0 pasos de elección de provincia (ninguna acción ni pedido de escritura sobre el usuario), 0 recargas, ningún dato dos veces.
   expect(acciones.filter((a) => /provincia$/.test(a) && a !== 'denominación simplificada')).toEqual([])

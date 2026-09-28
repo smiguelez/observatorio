@@ -1,15 +1,15 @@
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { readFileSync } from 'node:fs'
 
 // Helpers de E2E contra el backend REAL (sin mocks). Requieren:
 //   DATABASE_URL  — misma base que usa el backend (para crear/limpiar fixtures `test-frontend-*`)
-//   BACKEND_LOG   — archivo donde el backend redirige su stdout (el magic link se LOGUEA, no se envía: G4)
 export const PREFIJO = 'test-frontend-'
 export const CLAVE = 'contrasena-test-12345'
-export const BACKEND = 'http://localhost:3000'
+// Overridable SOLO para validar contra una instancia propia en otro puerto (010, T020) sin tocar
+// la de :3000 — default sin cambios para cualquier corrida normal.
+export const BACKEND = process.env.E2E_BACKEND_URL ?? 'http://localhost:3000'
 // Origen del frontend en dev: es el origen confiable que fija BETTER_AUTH_URL.
-const ORIGEN = 'http://localhost:5173'
+const ORIGEN = process.env.E2E_ORIGEN_URL ?? 'http://localhost:5173'
 
 function psql(sql: string): string {
   const url = process.env.DATABASE_URL
@@ -32,7 +32,11 @@ export function limpiarFixtures(prefijo = PREFIJO): void {
     'DELETE FROM auth."user" WHERE email LIKE $P',
     'DELETE FROM usuarios WHERE email LIKE $P',
     // Pools de prueba: se identifican por prefijo de descripcion (mismo criterio que backend/tests).
-    `DELETE FROM grupos_jueces WHERE descripcion LIKE '${prefijo}%' OR descripcion LIKE 'Grupo exclusivo de ${prefijo}%'`,
+    // ILIKE (no LIKE): "Grupo exclusivo de <denominación de UF>" arrastra la denominación ya
+    // NORMALIZADA (backend/src/util/denominaciones.ts) — puede empezar con mayúscula aunque el
+    // prefijo de fixtures sea todo minúscula; con LIKE (sensible a mayúsculas) esas filas quedaban
+    // huérfanas en la base real sin que ningún test lo notara.
+    `DELETE FROM grupos_jueces WHERE descripcion ILIKE '${prefijo}%' OR descripcion ILIKE 'Grupo exclusivo de ${prefijo}%'`,
   ]) psql(q(sql))
 }
 
@@ -128,15 +132,21 @@ export async function crearUsuarioSinClave(email: string, provinciaId = PROVINCI
   return { id: alta.id, token: alta.accesoInicial.token }
 }
 
-/** Último magic link logueado por el backend para `email`. */
+/**
+ * Último magic link vigente para `email`, leído de la base (010: desde que el magic link se ENVÍA
+ * de verdad en vez de solo logearse — G4 — ya no queda una URL completa en el stdout del backend
+ * para parsear; se reconstruye igual que hace Better Auth internamente, mismo criterio que ya usa
+ * `backend/tests/integration/magic-link.test.ts` — `auth.verification.value` guarda
+ * `{ email, attempt }` en JSON; `identifier` es el token en sí, sin prefijo).
+ */
 export function ultimoMagicLink(email: string): string {
-  const log = process.env.BACKEND_LOG
-  if (!log) throw new Error('Falta BACKEND_LOG (archivo con el stdout del backend)')
-  const lineas = readFileSync(log, 'utf8').split('\n').filter((l) => l.includes('[magic-link]') && l.includes(email))
-  const ultima = lineas.at(-1)
-  const m = ultima?.match(/Link: (\S+) \(token=/)
-  if (!m) throw new Error(`No hay magic link logueado para ${email}`)
-  return m[1]!
+  const token = sql(
+    `SELECT identifier FROM auth.verification WHERE value LIKE '%"email":"${email}"%' ORDER BY "createdAt" DESC LIMIT 1`,
+  )
+  if (!token) throw new Error(`No hay ningún magic link vigente en la base para ${email}`)
+  // Mismos callbackURL/errorCallbackURL que manda el formulario real (MagicLinkForm.tsx): si el
+  // segundo difiere, un token inválido/vencido termina en la pantalla equivocada.
+  return `${ORIGEN}/api/auth/magic-link/verify?token=${token}&callbackURL=%2F&errorCallbackURL=%2Flogin`
 }
 
 /** Pide el magic link por API (para fixtures) y devuelve su URL. */
@@ -147,7 +157,6 @@ export async function pedirMagicLink(email: string): Promise<string> {
     body: JSON.stringify({ email, callbackURL: '/' }),
   })
   if (!r.ok) throw new Error(`magic-link falló para ${email}: ${r.status} ${await r.text()}`)
-  await new Promise((res) => setTimeout(res, 300)) // el backend loguea de forma asíncrona
   return ultimoMagicLink(email)
 }
 

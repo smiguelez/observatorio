@@ -44,7 +44,11 @@ describe('Magic link', () => {
 
   it('email NO dado de alta: respuesta idéntica a la de uno dado de alta, pero sin enlace utilizable ni filas (FR-003)', async () => {
     await provisionarSinIdentidad(pool, email('si'))
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    // 010: el envío real (y qué se loguea si falla) se prueba aparte, con `enviarEmail` mockeado
+    // (tests/integration/envio-email-logs.test.ts). Acá solo importa la respuesta al cliente — se
+    // silencia el `console.error` esperado (sin RESEND_API_KEY real en este entorno de test, el
+    // envío falla igual para los dos casos) para no ensuciar la salida del test.
+    vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const conAlta = await pedir(app, email('si'))
     const sinAlta = await pedir(app, email('no'))
@@ -52,10 +56,8 @@ describe('Magic link', () => {
     expect(sinAlta.statusCode).toBe(conAlta.statusCode)
     expect(sinAlta.json()).toEqual(conAlta.json())
     expect(sinAlta.json()).toEqual({ status: true })
-    // Solo el dado de alta deja un enlace registrado (log) y un token en la base.
-    const textoLog = log.mock.calls.map((c) => c.join(' ')).join('\n')
-    expect(textoLog).toContain(email('si'))
-    expect(textoLog).not.toContain(email('no'))
+    // Solo el dado de alta deja un token real en la base — el NO dado de alta ni siquiera llega a
+    // intentar el envío (FR-003 de 007, sin cambios de esta feature).
     expect(await contarIdentidad(pool, email('no'))).toEqual(CERO)
     expect(await tokenMasReciente(email('no'))).toBeUndefined()
   })

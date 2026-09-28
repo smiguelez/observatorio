@@ -1,6 +1,6 @@
 # Feature Specification: Envío de email para acceso
 
-**Feature Branch**: `009-envio-email-autenticacion`
+**Feature Branch**: `010-envio-email-autenticacion`
 
 **Created**: 2026-09-27
 

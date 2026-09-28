@@ -46,6 +46,20 @@ export async function emitirAccesoInicial(pool: pg.Pool, usuarioId: string): Pro
   return { token, vence }
 }
 
+// 010 (US2): busca el acceso VIGENTE de un usuario (la misma fila que `emitirAccesoInicial` borra
+// al reemitir, y que `canjearAccesoInicial` consulta al canjear) — para poder reenviarlo por email
+// sin generar uno nuevo ni invalidar el que ya podría estar circulando (research.md, Decisión 4).
+export async function obtenerAccesoInicialVigente(pool: pg.Pool, usuarioId: string): Promise<AccesoInicial | null> {
+  const { rows } = await pool.query<{ identifier: string; expiresAt: Date }>(
+    `SELECT identifier, "expiresAt" FROM auth.verification
+      WHERE identifier LIKE $1 AND value = $2 AND "expiresAt" > now()
+      ORDER BY "createdAt" DESC LIMIT 1`,
+    [`${PREFIJO}%`, usuarioId],
+  )
+  if (rows.length === 0) return null
+  return { token: rows[0]!.identifier.slice(PREFIJO.length), vence: rows[0]!.expiresAt }
+}
+
 export interface CanjeExitoso {
   usuarioId: string
   setCookie: string[]

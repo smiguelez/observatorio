@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cambiarRol, crearUsuario, emitirAccesoInicial, listarUsuarios, obtenerUsuario } from '@/api/usuarios'
+import { cambiarRol, crearUsuario, emitirAccesoInicial, enviarAccesoInicialPorEmail, listarUsuarios, obtenerUsuario } from '@/api/usuarios'
 import altaAdmin from './fixtures/real/usuario-alta-admin.json'
 import alta from './fixtures/real/usuario-alta.json'
 import reemitido from './fixtures/real/acceso-reemitido.json'
@@ -62,6 +62,17 @@ describe('alta administrada, acceso inicial y rol (respuestas REALES de 007)', (
     expect(init.method).toBe('POST')
     expect(init.body).toBeUndefined()
     expect(init.headers).toBeUndefined()
+  })
+  it('010: enviar por email — sin cuerpo, y refleja emailEnviado tal cual (éxito y fallo)', async () => {
+    responder({ emailEnviado: true })
+    expect(await enviarAccesoInicialPorEmail(2396)).toEqual({ emailEnviado: true })
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]! as [string, RequestInit]
+    expect(url).toBe('/api/usuarios/2396/acceso-inicial/enviar-email')
+    expect(init.method).toBe('POST')
+    expect(init.body).toBeUndefined()
+
+    responder({ emailEnviado: false })
+    expect(await enviarAccesoInicialPorEmail(2396)).toEqual({ emailEnviado: false })
   })
   it('cambio de rol: { id, roles } con id number, y envía { rol } por PUT', async () => {
     responder(rol)

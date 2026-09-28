@@ -82,44 +82,53 @@ la Fase A construye.
 **Por qué es su propia fase:** dos cosas separadas de esta lista dependen
 de esto y ninguna se puede cerrar sin ella:
 - **G4**: magic link enviado por correo real, no solo logueado en consola.
-  **✅ Código hecho por `010-envio-email-autenticacion` (2026-09-28)**: el
-  magic link se envía vía Resend (antes solo se logueaba); además, dar de
-  alta o reemitir un acceso inicial ahora puede enviarlo por email además
-  de copiarlo a mano. Backend 237/237, frontend 211/211, `tsc` limpio en
-  ambos, y los 18 archivos de E2E corridos contra una instancia propia del
-  backend (evidencia real, no mockeada) sin ninguna regresión atribuible a
-  esta feature. **No cerrado del todo**: sin el dominio verificado (ver
-  abajo), el código no puede enviar un email real todavía.
+  **✅ RESUELTO de punta a punta por `010-envio-email-autenticacion`
+  (2026-09-28)**: el magic link se envía vía Resend (antes solo se
+  logueaba); además, dar de alta o reemitir un acceso inicial ahora puede
+  enviarlo por email además de copiarlo a mano. Backend 237/237, frontend
+  211/211, `tsc` limpio en ambos, 18 archivos de E2E corridos contra una
+  instancia propia del backend (evidencia real, no mockeada) sin ninguna
+  regresión atribuible a esta feature — y, con el dominio ya verificado
+  (ver abajo), probado a mano contra la API real: un magic link real
+  llegó a un inbox de Gmail sin caer en spam, y un acceso inicial enviado
+  por email también llegó.
 - Aviso de aprobación, si alguna vez se construye el ítem 9 del backlog
   (solicitud de acceso) — no es indispensable ahora, pero magic link sí lo
   es para cualquier uso real del sistema.
 
 Proveedor de envío ya decidido: Resend, capa gratuita (`010-envio-email-autenticacion`).
 
-**Bloqueante — gestión externa, no código (la más urgente de todo el
-plan ahora mismo):** Resend exige un dominio propio verificado desde el
-primer envío real — no hay volumen que lo evite; el dominio de prueba
-(`onboarding@resend.dev`) solo puede entregar al email del dueño de la
-cuenta de Resend, nunca a un usuario real (`010`, research.md, Decisión
-1). Verificarlo implica agregar unos pocos registros DNS (MX + SPF +
-DKIM) en la zona de Cloudflare de `jufejus.org.ar` (ya delegada ahí,
-confirmado) y esperar la propagación (hasta 24hs) — **pero eso requiere
-acceso administrativo a esa cuenta de Cloudflare**, que hoy nadie del
-proyecto tiene confirmado. Es el mismo acceso que también hace falta más
-adelante para el subdominio de la app (Fase E, D5) y para el dominio
-final de las credenciales OAuth de Google (Fase E) — encima, es el que
-más urge de los tres, porque bloquea Fase C ya mismo (el resto de esa
-fase se puede diseñar e implementar sin la API key real, ver `010`, pero
-no se puede *encender* sin el dominio verificado). Conseguir ese acceso
-(o a alguien que lo tenga y pueda cargar los registros) es la gestión
-externa a resolver primero, antes que cualquier otra tarea de código de
-esta fase.
+**Bloqueante — gestión externa, no código.** Resend exige un dominio
+propio verificado desde el primer envío real — no hay volumen que lo
+evite; el dominio de prueba (`onboarding@resend.dev`) solo puede entregar
+al email del dueño de la cuenta de Resend, nunca a un usuario real (`010`,
+research.md, Decisión 1). Verificarlo implicaba conseguir acceso
+administrativo a la cuenta de Cloudflare de `jufejus.org.ar` (ya delegada
+ahí, confirmado) para cargar los registros que Resend pidiera — el mismo
+acceso que también hace falta más adelante para el subdominio de la app
+(Fase E, D5) y para el dominio final de las credenciales OAuth de Google
+(Fase E).
 
-**Estado (`010`, tasks.md T010): dominio NO verificado todavía** — sigue
-pendiente esa gestión externa. Sin ella, el código ya construido no puede
-probarse contra la API real de Resend (los 5 registros DNS de arriba están
-sin cargar), aunque el resto de la feature está implementado y probado con
-el envío mockeado.
+**✅ RESUELTO (2026-09-28): `send.jufejus.org.ar` verificado en Resend**
+(región `sa-east-1`, plan **Resend Forge** — en la práctica, 1 TXT de DKIM
++ 2 CNAME hacia `forge.rmta.net`, cargados en Cloudflare en modo "DNS
+only"/sin proxy; el estimado original de este documento, MX + SPF + DKIM,
+era una aproximación genérica que no coincidió con lo que pidió la cuenta
+real — corregido en `010/research.md`, Decisión 1). Confirmado de punta a
+punta a mano: magic link real recibido en un inbox de Gmail sin caer en
+spam, y acceso inicial por email también recibido.
+
+**A tener en cuenta antes del corte real (no bloqueante para seguir
+desarrollando, pero sí para producción):**
+- La cuenta de Resend quedó registrada con el correo institucional del
+  administrador del dominio (`jufejus.org.ar`) — la debilidad no es que
+  sea una casilla privada, sino que el acceso depende de una sola persona.
+- El plan gratuito admite **un solo miembro** en la cuenta y un tope de
+  **100 emails por día** — suficiente para desarrollo y para el volumen
+  esperado hoy (menos de 50 usuarios, altas esporádicas), pero antes del
+  corte real conviene sumarle acceso compartido a más de una persona (el
+  plan gratuito no lo permite) y revisar si ese tope diario sigue
+  alcanzando.
 
 ---
 

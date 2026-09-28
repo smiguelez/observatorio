@@ -40,6 +40,25 @@ dominio raíz que ya sirve el sitio en WordPress) implica:
   Cloudflare (quien gestiona hoy el WordPress de `jufejus.org.ar`, o que
   esa persona cree los registros) — no una migración de DNS.
 
+**Corrección tras verificar de verdad (T010, 2026-09-28): los registros
+reales no fueron los estimados arriba.** La cuenta de Resend usada asigna
+**Resend Forge** (no "SES Easy DKIM") para dominios nuevos en la región
+**sa-east-1**, que pide un conjunto distinto:
+- **1 TXT de DKIM** (no MX, no SPF aparte — Forge lo resuelve distinto).
+- **2 CNAME**: `rsend.send` y `send.send`, ambos apuntando a
+  `forge.rmta.net`.
+- Los dos CNAME se cargaron en Cloudflare en modo **"DNS only"** (sin el
+  proxy naranja) — con proxy activado, Resend no puede verificarlos.
+- Verificado en Resend, y confirmado de punta a punta: un magic link real
+  llegó a un inbox de Gmail (sin caer en spam) y un acceso inicial enviado
+  por email también llegó — ambos probados a mano por el usuario.
+
+El estimado de "MX + SPF + 3 CNAME (SES Easy DKIM)" de más arriba queda
+como historial de lo que se esperaba antes de verificar — Resend puede
+asignar un esquema distinto (Forge vs. SES) según la cuenta/región, así
+que no es un dato fijo para volver a asumir en otro proyecto sin
+confirmarlo de nuevo contra el dashboard real.
+
 **Alternativas evaluadas.**
 
 | Opción | Resultado |
@@ -51,9 +70,13 @@ dominio raíz que ya sirve el sitio en WordPress) implica:
 **Qué implica en tiempo de configuración, en una frase:** cero código
 bloqueado por esto (se puede diseñar e implementar todo sin la API key
 real, ver Decisión 3), pero el envío real a usuarios reales **no** puede
-encenderse hasta que alguien con acceso a Cloudflare agregue esos 5
-registros y pase la propagación — hay que pedir ese acceso ahora, no cuando
-el código ya esté listo.
+encenderse hasta que alguien con acceso a Cloudflare agregue los registros
+que Resend pida y pase la propagación — hay que pedir ese acceso ahora, no
+cuando el código ya esté listo.
+
+**Resuelto (T010, 2026-09-28):** `send.jufejus.org.ar` verificado en
+Resend; ver la corrección de arriba para los registros reales que hizo
+falta cargar.
 
 ---
 

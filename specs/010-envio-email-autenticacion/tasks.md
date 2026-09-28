@@ -70,10 +70,10 @@ casos y que solo en el segundo aparece la línea de log.
 ### Implementation for User Story 1
 
 - [x] T009 [US1] `backend/src/auth/providers/magic-link.ts`: `sendMagicLink` deja de hacer `console.log('TODO...')` y en su lugar arma la plantilla (`plantillaMagicLink({ url })`, T004) y llama a `enviarEmail(...)` (T005). Si el resultado es `ok: false`, loguea con `console.error` la línea estructurada que T008 verifica (nunca el `token` ni el `url`). Si es `ok: true`, no loguea nada.
-- [ ] T010 [US1] **Prerequisito puntual, no bloquea nada anterior**: conseguir `RESEND_API_KEY` real y un dominio verificado en Resend (research.md, Decisión 1 — subdominio de `jufejus.org.ar`, requiere acceso a esa cuenta de Cloudflare, ver `docs/plan-camino-a-produccion.md` Fase C) antes de probar el escenario 5 de `quickstart.md` (envío real de punta a punta). Sin esto, US1 queda completa e implementada, solo falta la validación contra la API real.
+- [x] T010 [US1] **Ejecutado (2026-09-28).** Dominio `send.jufejus.org.ar` verificado en Resend (región `sa-east-1`, Resend Forge — 1 TXT de DKIM + 2 CNAME hacia `forge.rmta.net`, no el esquema estimado originalmente en research.md, Decisión 1; corregido ahí). Validado de punta a punta a mano por el usuario: magic link real recibido en un inbox de Gmail sin caer en spam, y acceso inicial por email recibido. Escenario 5 de `quickstart.md` (envío real) queda cubierto.
 
-**Checkpoint**: US1 completa y probada con Resend mockeado — funcional de
-punta a punta salvo la validación final contra la API real (T010).
+**Checkpoint**: US1 completa, probada con Resend mockeado, y validada
+contra la API real (T010) — funcional de punta a punta.
 
 ---
 

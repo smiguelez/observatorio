@@ -1,10 +1,14 @@
 // T025 (007, US4): contrato del alta administrada, la reemisión y el canje del acceso inicial
 // (contracts/api.md §1). Contra la app real y la base real.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../../src/app.js'
 import { getPgPool } from '../../src/db/pool.js'
 import { contarIdentidad, crearUsuarioDePrueba, extraerCookie, limpiarUsuariosDePrueba, provisionarSinIdentidad } from '../helpers/db.js'
+
+// T011/T012 (010, US2): `enviarEmail` mockeado — nunca la red real (research.md, Decisión 3).
+vi.mock('../../src/email/resend.js', () => ({ enviarEmail: vi.fn() }))
+import { enviarEmail } from '../../src/email/resend.js'
 
 const PREFIJO = 'test-contract-acceso'
 const pool = getPgPool()
@@ -29,6 +33,9 @@ describe('Contrato: alta administrada y acceso inicial', () => {
   afterAll(async () => {
     await limpiarUsuariosDePrueba(pool, PREFIJO)
     await app.close()
+  })
+  afterEach(() => {
+    vi.mocked(enviarEmail).mockReset()
   })
 
   describe('POST /api/usuarios', () => {
@@ -109,6 +116,69 @@ describe('Contrato: alta administrada y acceso inicial', () => {
       expect(ok.json()).toEqual({ usuarioId: id })
       const s = await app.inject({ method: 'GET', url: '/api/auth/session', headers: { cookie: extraerCookie(ok.headers['set-cookie']) } })
       expect(s.json()).toEqual({ usuarioId: id, rol: 'usuario_normal', provinciaId: 4 })
+    })
+  })
+
+  // T011/T012 (010, US2): endpoint nuevo — envía el acceso YA vigente, sin generar uno nuevo.
+  describe('POST /api/usuarios/:id/acceso-inicial/enviar-email', () => {
+    const enviar = (id: string, cookie: string | undefined) =>
+      app.inject({ method: 'POST', url: `/api/usuarios/${id}/acceso-inicial/enviar-email`, headers: cookie ? { cookie } : {} })
+
+    it('401 sin sesión, 403 no admin', async () => {
+      const a = (await alta(admin.cookie, { email: email('env-401'), rol: 'usuario_normal', provinciaId: 1 })).json()
+      expect((await enviar(a.id, undefined)).statusCode).toBe(401)
+      expect((await enviar(a.id, normal.cookie)).statusCode).toBe(403)
+    })
+
+    it('envío exitoso: 200 { emailEnviado: true }, sin tocar el token vigente (contracts/api.md)', async () => {
+      vi.mocked(enviarEmail).mockResolvedValue({ ok: true })
+      const a = (await alta(admin.cookie, { email: email('env-ok'), rol: 'usuario_normal', provinciaId: 1 })).json()
+
+      const res = await enviar(a.id, admin.cookie)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.json()).toEqual({ emailEnviado: true })
+      expect(enviarEmail).toHaveBeenCalledTimes(1)
+      const [args] = vi.mocked(enviarEmail).mock.calls[0]!
+      expect(args.to).toBe(email('env-ok'))
+      expect(args.html).toContain(a.accesoInicial.token) // el mismo token ya generado, no uno nuevo
+
+      // El token vigente sigue siendo el mismo: se puede canjear sin problema.
+      expect((await canjear({ token: a.accesoInicial.token, password: 'clave-tras-envio-1' })).statusCode).toBe(200)
+    })
+
+    it('envío fallido: 200 { emailEnviado: false } — nunca un error HTTP (FR-006/007)', async () => {
+      vi.mocked(enviarEmail).mockResolvedValue({ ok: false, motivo: 'Resend respondió 500' })
+      const a = (await alta(admin.cookie, { email: email('env-fallo'), rol: 'usuario_normal', provinciaId: 1 })).json()
+
+      const res = await enviar(a.id, admin.cookie)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.json()).toEqual({ emailEnviado: false })
+      // "Copiar enlace" (el token ya generado) sigue funcionando igual — el fallo de envío no lo toca.
+      expect((await canjear({ token: a.accesoInicial.token, password: 'clave-post-fallo-1' })).statusCode).toBe(200)
+    })
+
+    it('sin ningún acceso vigente (ya canjeado): 404, sin intentar enviar nada', async () => {
+      const a = (await alta(admin.cookie, { email: email('env-canjeado'), rol: 'usuario_normal', provinciaId: 1 })).json()
+      await canjear({ token: a.accesoInicial.token, password: 'una-clave-cualquiera-1' })
+
+      const res = await enviar(a.id, admin.cookie)
+
+      expect(res.statusCode).toBe(404)
+      expect(enviarEmail).not.toHaveBeenCalled()
+    })
+
+    it('tras reemitir, envía el token NUEVO — el anterior ya no es el vigente', async () => {
+      vi.mocked(enviarEmail).mockResolvedValue({ ok: true })
+      const a = (await alta(admin.cookie, { email: email('env-reemitido'), rol: 'usuario_normal', provinciaId: 1 })).json()
+      const nuevo = (await app.inject({ method: 'POST', url: `/api/usuarios/${a.id}/acceso-inicial`, headers: { cookie: admin.cookie } })).json()
+
+      await enviar(a.id, admin.cookie)
+
+      const [args] = vi.mocked(enviarEmail).mock.calls[0]!
+      expect(args.html).toContain(nuevo.token)
+      expect(args.html).not.toContain(a.accesoInicial.token)
     })
   })
 

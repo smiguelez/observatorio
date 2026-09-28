@@ -147,7 +147,10 @@ test('20c. exportar PDF: un archivo válido con la misma información que la pan
   expect(texto.startsWith('%PDF-')).toBe(true)
   expect(descarga.suggestedFilename()).toMatch(/^completitud-organismos-\d{4}-\d{2}-\d{2}\.pdf$/)
   expect(texto).toContain(`${m[1]} de ${m[2]} organismos completos`) // el mismo resumen que en pantalla
-  for (const clave of ['completo', 'sin-uf', 'coordinacion', 'sin-taxonomia']) expect(texto).toContain(`${PREFIJO}${clave}`)
+  // El backend normaliza `denominacion` al guardar (backend/src/util/denominaciones.ts): un solo
+  // token sin espacios ("test-frontend-sin-uf") solo capitaliza su primera letra.
+  const PREFIJO_CAPITALIZADO = PREFIJO[0]!.toUpperCase() + PREFIJO.slice(1)
+  for (const clave of ['completo', 'sin-uf', 'coordinacion', 'sin-taxonomia']) expect(texto).toContain(`${PREFIJO_CAPITALIZADO}${clave}`)
 })
 
 test('un usuario normal en /admin/organismos ve lo mismo que una ruta inexistente', async ({ page }) => {

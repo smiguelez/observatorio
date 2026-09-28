@@ -3,7 +3,8 @@ import { useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { useProvincias } from '@/api/catalogos.hooks'
-import { useCrearUsuario } from '@/api/usuarios'
+import type { UsuarioId } from '@/api/sesion'
+import { useCrearUsuario, useEnviarAccesoInicialPorEmail } from '@/api/usuarios'
 import SelectCatalogo from '@/components/forms/SelectCatalogo'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -23,24 +24,34 @@ export function construirEnlace(token: string): string {
 export interface AccesoParaMostrar {
   enlace: string
   vence: Date
-  /** A quién corresponde (para el título); no es un dato sensible. */
+  /** A quién corresponde (para el título y para enviarlo); no es un dato sensible. */
   email?: string
+  /** 010 (US2): a quién enviarle el email — el enlace en sí nunca viaja de nuevo al servidor. */
+  usuarioId: UsuarioId
 }
 
 /**
  * Paso "enlace": se muestra UNA sola vez (FR-002). Vive en estado local del componente que lo abre: nunca en el caché de
  * TanStack Query (FR-003). Cerrarlo sin haber copiado pide confirmación.
+ *
+ * 010 (US2): "Enviar por email" es una acción aparte de "Copiar enlace", sobre el MISMO enlace ya
+ * generado — no reemite nada. Las dos opciones conviven siempre (FR-005); un fallo de envío no
+ * oculta ni invalida el enlace que ya se puede copiar (FR-007).
  */
 export function AccesoInicialDialog({ acceso, alCerrar }: { acceso: AccesoParaMostrar | null; alCerrar: () => void }) {
   const [copiado, setCopiado] = useState(false)
   const [noPudoCopiar, setNoPudoCopiar] = useState(false)
   const [confirmarCierre, setConfirmarCierre] = useState(false)
+  const [resultadoEnvio, setResultadoEnvio] = useState<'exito' | 'fallo' | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const enviarEmail = useEnviarAccesoInicialPorEmail()
 
   function cerrar() {
     setCopiado(false)
     setNoPudoCopiar(false)
     setConfirmarCierre(false)
+    setResultadoEnvio(null)
+    enviarEmail.reset()
     alCerrar()
   }
   function pedirCierre() {
@@ -57,6 +68,18 @@ export function AccesoInicialDialog({ acceso, alCerrar }: { acceso: AccesoParaMo
       // Sin portapapeles (contexto no seguro o permiso denegado): se deja el campo seleccionado para copiar a mano.
       setNoPudoCopiar(true)
       inputRef.current?.select()
+    }
+  }
+  async function enviarPorEmail() {
+    if (!acceso) return
+    setResultadoEnvio(null)
+    try {
+      const { emailEnviado } = await enviarEmail.mutateAsync(acceso.usuarioId)
+      setResultadoEnvio(emailEnviado ? 'exito' : 'fallo')
+    } catch {
+      // Fallo de red/servidor al INTENTAR enviar (distinto de "Resend devolvió un fallo", que ya
+      // vuelve como `emailEnviado: false` sin lanzar) — mismo aviso, mismo fallback a copiar a mano.
+      setResultadoEnvio('fallo')
     }
   }
 
@@ -88,11 +111,22 @@ export function AccesoInicialDialog({ acceso, alCerrar }: { acceso: AccesoParaMo
                 </p>
               )}
               {copiado && <p role="status" className="text-sm">Enlace copiado.</p>}
+              {resultadoEnvio === 'exito' && (
+                <p role="status" data-testid="email-enviado" className="text-sm">Enviado por email.</p>
+              )}
+              {resultadoEnvio === 'fallo' && (
+                <p role="alert" data-testid="email-no-enviado" className="rounded-md border border-destructive/50 p-3 text-sm">
+                  No pudimos enviarlo por email. El enlace sigue disponible: copialo a mano.
+                </p>
+              )}
             </div>
           )}
           <DialogFooter>
             <Button type="button" variant="outline" data-testid="copiar-enlace" onClick={() => void copiar()}>
               Copiar enlace
+            </Button>
+            <Button type="button" variant="outline" data-testid="enviar-por-email" disabled={enviarEmail.isPending} onClick={() => void enviarPorEmail()}>
+              {enviarEmail.isPending ? 'Enviando…' : 'Enviar por email'}
             </Button>
             <Button type="button" data-testid="cerrar-acceso" onClick={pedirCierre}>
               Cerrar
@@ -147,7 +181,7 @@ export default function AltaUsuarioDialog({ abierto, alCambiar }: { abierto: boo
     try {
       const alta = await crear.mutateAsync({ email: v.email, rol: v.rol, provinciaId: v.provinciaId })
       // El acceso se copia a estado LOCAL y la mutación se descarta: no debe quedar en el caché (FR-003).
-      setAcceso({ enlace: construirEnlace(alta.accesoInicial.token), vence: alta.accesoInicial.vence, email: alta.email })
+      setAcceso({ enlace: construirEnlace(alta.accesoInicial.token), vence: alta.accesoInicial.vence, email: alta.email, usuarioId: alta.id })
       crear.reset()
       form.reset(VALORES_INICIALES)
       alCambiar(false)

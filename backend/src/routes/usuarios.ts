@@ -8,7 +8,10 @@ import { getPgPool } from '../db/pool.js'
 import { puedeEditarUsuario } from '../authz/usuarios.js'
 import { esAdmin } from '../authz/rules.js'
 import { actualizarUsuario, cambiarRol, provisionarUsuario } from '../services/usuarios.js'
-import { emitirAccesoInicial } from '../auth/acceso-inicial.js'
+import { emitirAccesoInicial, obtenerAccesoInicialVigente } from '../auth/acceso-inicial.js'
+import { loadOrigenFrontend } from '../config/env.js'
+import { enviarEmail } from '../email/resend.js'
+import { plantillaAccesoInicial } from '../email/plantillas.js'
 
 const ActualizarUsuarioBody = Type.Partial(
   Type.Object({
@@ -118,6 +121,32 @@ export async function registrarRutasUsuarios(app: FastifyInstance) {
       }
       const acceso = await emitirAccesoInicial(pool, request.params.id)
       return reply.code(201).send({ token: acceso.token, vence: acceso.vence.toISOString() })
+    },
+  )
+
+  // 010 (US2): envía por email el acceso VIGENTE (el de la alta o la última reemisión) — no genera
+  // uno nuevo ni invalida el que ya podría estar circulando (research.md, Decisión 4). El fallo de
+  // ENVÍO nunca es un error HTTP (FR-006/007): sigue siendo 200 con `emailEnviado: false`. No
+  // loguea nada (el admin ya lo ve en la respuesta, en la misma pantalla que la disparó).
+  app.post<{ Params: { id: string } }>(
+    '/api/usuarios/:id/acceso-inicial/enviar-email',
+    { schema: { params: ParamsId } },
+    async (request, reply) => {
+      if (!esAdmin(request.identidad!)) {
+        return reply.code(403).send({ error: 'Solo un administrador puede enviar un acceso inicial por email.' })
+      }
+      const usuarioId = request.params.id
+      const [acceso, usuario] = await Promise.all([
+        obtenerAccesoInicialVigente(pool, usuarioId),
+        pool.query<{ email: string }>('SELECT email::text FROM usuarios WHERE id = $1', [usuarioId]),
+      ])
+      if (!acceso) return reply.code(404).send({ error: 'No hay un acceso inicial vigente para este usuario.' })
+      if (usuario.rowCount === 0) return reply.code(404).send({ error: 'No encontrado' })
+
+      const url = `${loadOrigenFrontend()}/primer-acceso#token=${acceso.token}`
+      const { subject, html } = plantillaAccesoInicial({ url })
+      const resultado = await enviarEmail({ to: usuario.rows[0]!.email, subject, html })
+      return reply.code(200).send({ emailEnviado: resultado.ok })
     },
   )
 }

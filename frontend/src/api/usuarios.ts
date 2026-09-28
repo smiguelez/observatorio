@@ -130,6 +130,18 @@ export async function crearUsuario(datos: AltaUsuarioInput): Promise<UsuarioAlta
 export async function emitirAccesoInicial(id: UsuarioId): Promise<AccesoInicial> {
   return parsear(AccesoInicialWire, await http(`/api/usuarios/${id}/acceso-inicial`, { method: 'POST' }), 'acceso-inicial')
 }
+
+// ---- 010: enviar por email el acceso YA generado (no genera uno nuevo ni invalida el vigente) ----
+
+const EnvioWire = z.object({ emailEnviado: z.boolean() })
+
+/** Solo admin. Envía el acceso VIGENTE de `id` (el de la alta o la última reemisión) — sin cuerpo, sin token. */
+export async function enviarAccesoInicialPorEmail(id: UsuarioId): Promise<{ emailEnviado: boolean }> {
+  return parsear(EnvioWire, await http(`/api/usuarios/${id}/acceso-inicial/enviar-email`, { method: 'POST' }), 'acceso-inicial-email')
+}
+export function useEnviarAccesoInicialPorEmail() {
+  return useMutation({ mutationFn: (id: UsuarioId) => enviarAccesoInicialPorEmail(id) })
+}
 /** Solo admin. `rol: 'admin'` agrega la fila admin; `'usuario_normal'` la quita (nunca queda el sistema sin admins). */
 export async function cambiarRol(id: UsuarioId, rol: Rol): Promise<{ id: UsuarioId; roles: Rol[] }> {
   return parsear(RolCambiadoWire, await http(`/api/usuarios/${id}/rol`, { method: 'PUT', body: { rol } }), 'usuario-rol')

@@ -55,7 +55,8 @@ test('19a. el propietario agrega un editor: el editor ve el organismo en su list
   await expect(otra.getByTestId('fila-organismo')).toHaveCount(1)
   await expect(otra.getByTestId('fila-organismo')).toContainText('Editor')
   await otra.goto(`/organismos/${orgId}`)
-  await expect(otra.getByTestId('titulo-organismo')).toContainText('org editores')
+  // El backend normaliza `denominacion` al guardar (backend/src/util/denominaciones.ts).
+  await expect(otra.getByTestId('titulo-organismo')).toContainText('org Editores')
   evidencia.editorVeElOrganismo = true
   await ctx.close()
 })

@@ -8,6 +8,10 @@ const B = `${PREFIJO}venc-b@example.test`
 const evidencia: Record<string, unknown> = {}
 let orgId: string
 const denominacionEnBase = () => sql(`SELECT denominacion FROM organismos WHERE id = ${orgId}`)
+// El backend normaliza `denominacion` al guardar (backend/src/util/denominaciones.ts): sin espacios
+// solo capitaliza la primera letra; "a" es una preposición que queda en minúscula salvo que sea la
+// primera palabra.
+const CAP = PREFIJO[0]!.toUpperCase() + PREFIJO.slice(1)
 
 test.describe.configure({ mode: 'serial' })
 
@@ -29,7 +33,7 @@ test('25a. la sesión vence con un formulario a medias: aviso, re-ingreso sin re
   await entrarUI(page, A)
   await page.goto(`/organismos/${orgId}`)
   const campo = page.getByLabel('Denominación', { exact: true })
-  await expect(campo).toHaveValue(`${PREFIJO}original`)
+  await expect(campo).toHaveValue(`${CAP}original`)
   await campo.fill(`${PREFIJO}borrador escrito a mano`)
 
   // Marca en window: si la página se recargara o la app se remontara, se pierde. Prueba de que NO pasó.
@@ -44,7 +48,7 @@ test('25a. la sesión vence con un formulario a medias: aviso, re-ingreso sin re
   await expect(dialogo).toBeVisible()
   await expect(dialogo).toContainText('Tu sesión venció')
   expect(estados).toEqual([401])
-  expect(denominacionEnBase()).toBe(`${PREFIJO}original`) // el guardado fallido no cambió nada
+  expect(denominacionEnBase()).toBe(`${CAP}original`) // el guardado fallido no cambió nada
   await page.screenshot({ path: process.env.VENC_PNG ?? 'test-results/sesion-vencida.png' })
 
   // Re-ingreso por contraseña sobre la misma pantalla.
@@ -58,7 +62,7 @@ test('25a. la sesión vence con un formulario a medias: aviso, re-ingreso sin re
   expect(await page.evaluate(() => (window as unknown as { __marca?: string }).__marca)).toBe('sigue-la-misma-pagina')
   await page.getByRole('button', { name: 'Guardar cambios' }).click()
   await expect(page.getByTestId('mensaje-datos')).toContainText('Cambios guardados')
-  expect(denominacionEnBase()).toBe(`${PREFIJO}borrador escrito a mano`)
+  expect(denominacionEnBase()).toBe(`${CAP}borrador Escrito a Mano`)
   evidencia.mismaCuenta = { estados, recargo: false, guardado: denominacionEnBase() }
 })
 

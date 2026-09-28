@@ -13,7 +13,13 @@ const U = `${PREFIJO}vis-user@example.test`
 const OUT = process.env.VISUAL_DIR ?? 'test-results'
 
 async function anonimizar(page: Page) {
-  const esPrueba = (t: string | null | undefined) => (t ?? '').startsWith(PREFIJO) || (t ?? '').startsWith('Grupo exclusivo de test-frontend')
+  // Insensible a mayúsculas: el backend normaliza `denominacion`/`denominacion_unidad` al guardar
+  // (backend/src/util/denominaciones.ts), así que un fixture propio puede empezar con "Test-..." en
+  // vez de "test-..." — sigue siendo NUESTRO fixture, no debe caer en la rama de anonimizado.
+  const esPrueba = (t: string | null | undefined) => {
+    const s = (t ?? '').toLowerCase()
+    return s.startsWith(PREFIJO) || s.startsWith('grupo exclusivo de test-frontend')
+  }
   await page.route('**/api/usuarios', async (route) => {
     if (route.request().method() !== 'GET') return route.continue()
     const r = await route.fetch()

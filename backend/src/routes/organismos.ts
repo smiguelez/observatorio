@@ -610,12 +610,10 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
     },
   )
 
-  // --- Fuero (006-backend-endpoints-faltantes, US2 — solo lectura) ---
+  // --- Fuero (006-backend-endpoints-faltantes, US2 — lectura; 011, escritura) ---
 
-  app.get('/api/organismos/:orgId/fuero', async (request, reply) => {
-    const orgId = await autorizarContraOrganismoPadre(request, reply)
-    if (orgId === null) return
-
+  // Compartida entre el GET y la respuesta del PUT (011): misma forma exacta (contracts/api.md).
+  async function obtenerFuero(orgId: number) {
     const { rows: fueros } = await pool.query<{ id: number; nombre: string }>(
       `SELECT f.id, f.nombre
          FROM organismo_fueros ofu
@@ -630,7 +628,81 @@ export async function registrarRutasOrganismos(app: FastifyInstance) {
     )
 
     return { fueros, fueroSimplificado: simplificado[0]?.fuero_simplificado ?? null }
+  }
+
+  app.get('/api/organismos/:orgId/fuero', async (request, reply) => {
+    const orgId = await autorizarContraOrganismoPadre(request, reply)
+    if (orgId === null) return
+    return obtenerFuero(orgId)
   })
+
+  // 011 (US1/US2): reemplazo completo del listado — no altas/bajas individuales (research.md,
+  // Decisión 2). Misma autorización que el GET de esta subruta (Decisión 1): sin regla nueva.
+  const ActualizarFuerosBody = Type.Object({ fueroIds: Type.Array(Type.Integer()) })
+
+  app.put<{ Body: Static<typeof ActualizarFuerosBody> }>(
+    '/api/organismos/:orgId/fuero',
+    { schema: { body: ActualizarFuerosBody } },
+    async (request, reply) => {
+      const orgId = await autorizarContraOrganismoPadre(request, reply)
+      if (orgId === null) return
+
+      const fueroIds = [...new Set(request.body.fueroIds)]
+
+      if (fueroIds.length > 0) {
+        const { rows: existentes } = await pool.query<{ id: number }>('SELECT id FROM fueros WHERE id = ANY($1::smallint[])', [
+          fueroIds,
+        ])
+        const idsExistentes = new Set(existentes.map((r) => r.id))
+        const desconocidos = fueroIds.filter((id) => !idsExistentes.has(id))
+        if (desconocidos.length > 0) {
+          return reply.code(400).send({ error: `Fuero(s) inexistente(s): ${desconocidos.join(', ')}` })
+        }
+      }
+
+      // FR-004 (011, US2, Principio VIII): un fuero que desaparecería del listado no puede tener ya
+      // una asignación de jueces acotada específicamente a él. El trigger de `asignacion_fueros`
+      // (db/schema.sql) solo valida al INSERT/UPDATE de esa tabla — no protege contra un DELETE del
+      // lado de `organismo_fueros` (research.md, Decisión 4). Se verifica ANTES de escribir nada.
+      const { rows: enUso } = await pool.query<{ id: number; nombre: string }>(
+        `SELECT DISTINCT f.id, f.nombre
+           FROM organismo_fueros ofu
+           JOIN fueros f ON f.id = ofu.fuero_id
+          WHERE ofu.organismo_id = $1
+            AND ofu.fuero_id != ALL($2::smallint[])
+            AND EXISTS (
+              SELECT 1 FROM asignacion_fueros af
+              JOIN unidad_funcional_grupo_jueces g ON g.id = af.asignacion_id
+              JOIN unidades_funcionales uf ON uf.id = g.unidad_funcional_id
+              WHERE uf.organismo_id = ofu.organismo_id AND af.fuero_id = ofu.fuero_id
+            )
+         ORDER BY f.id`,
+        [orgId, fueroIds],
+      )
+      if (enUso.length > 0) {
+        throw new ErrorNegocio(
+          400,
+          `No se puede quitar el fuero «${enUso.map((f) => f.nombre).join('», «')}»: una unidad funcional de este organismo ya tiene una asignación de jueces acotada a ese fuero.`,
+          { fuerosEnUso: enUso },
+        )
+      }
+
+      await conTransaccion(pool, async (client) => {
+        await client.query('DELETE FROM organismo_fueros WHERE organismo_id = $1', [orgId])
+        for (const fueroId of fueroIds) {
+          await client.query('INSERT INTO organismo_fueros (organismo_id, fuero_id) VALUES ($1, $2)', [orgId, fueroId])
+        }
+        // 011: nunca produce 'multifuero_sin_detalle' desde este camino — ese valor es exclusivo de
+        // la migración original (D3); esta pantalla siempre sabe exactamente cuáles son los fueros.
+        await client.query('UPDATE organismos SET estado_fueros = $2 WHERE id = $1', [
+          orgId,
+          fueroIds.length === 0 ? 'sin_fueros_asignados' : 'cargado',
+        ])
+      })
+
+      return obtenerFuero(orgId)
+    },
+  )
 
   // --- Editores de organismo (006-backend-endpoints-faltantes, US4) ---
 

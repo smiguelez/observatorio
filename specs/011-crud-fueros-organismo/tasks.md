@@ -27,7 +27,7 @@ construir antes de las historias, a diferencia de otras features.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirmar línea base: `cd backend && npm test` y `npx tsc -b`; `cd frontend && npx vitest run` y `npx tsc -b` — todo limpio antes de tocar código de esta feature.
+- [x] T001 Confirmar línea base: `cd backend && npm test` y `npx tsc -b`; `cd frontend && npx vitest run` y `npx tsc -b` — todo limpio antes de tocar código de esta feature.
 
 **Checkpoint**: línea base confirmada.
 
@@ -45,15 +45,15 @@ mostrado cambia según lo elegido (spec.md, Acceptance Scenarios 1-3).
 
 ### Tests for User Story 1 ⚠️
 
-- [ ] T002 [P] [US1] `backend/tests/contract/organismo-fuero.test.ts`: extender con el `PUT` nuevo — un fuero (`fueroSimplificado` = ese nombre, `estado_fueros` pasa a `cargado`), más de uno (`fueroSimplificado` = `"multifuero"`), lista vacía (sin fuero asignado, `estado_fueros` pasa a `sin_fueros_asignados`), un `fueroId` inexistente (`400`, nada se escribe), sin sesión (`401`)/sin ser dueño-editor-admin (`403`)/organismo inexistente (`404`) — mismo criterio que ya cubre el `GET` de este archivo.
-- [ ] T003 [P] [US1] `frontend/tests/unit/routes/datos-tab.test.tsx` (nuevo): `DatosTab` muestra los fueros actuales como casillas marcadas (a partir de `useFueros()`/`useFuero()`, con `fetch` mockeado); marcar/desmarcar y guardar llama al `PUT` con el listado correcto; tras un guardado exitoso se ve el resumen recalculado que devuelve la respuesta.
+- [x] T002 [P] [US1] `backend/tests/contract/organismo-fuero.test.ts`: extender con el `PUT` nuevo — un fuero (`fueroSimplificado` = ese nombre, `estado_fueros` pasa a `cargado`), más de uno (`fueroSimplificado` = `"multifuero"`), lista vacía (sin fuero asignado, `estado_fueros` pasa a `sin_fueros_asignados`), un `fueroId` inexistente (`400`, nada se escribe), sin sesión (`401`)/sin ser dueño-editor-admin (`403`)/organismo inexistente (`404`) — mismo criterio que ya cubre el `GET` de este archivo.
+- [x] T003 [P] [US1] `frontend/tests/unit/routes/datos-tab.test.tsx` (nuevo): `DatosTab` muestra los fueros actuales como casillas marcadas (a partir de `useFueros()`/`useFuero()`, con `fetch` mockeado); marcar/desmarcar y guardar llama al `PUT` con el listado correcto; tras un guardado exitoso se ve el resumen recalculado que devuelve la respuesta.
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] `backend/src/routes/organismos.ts`: agregar `PUT /api/organismos/:orgId/fuero` (body `{ fueroIds: number[] }`, `Type.Array(Type.Integer())`) — autorización con `autorizarContraOrganismoPadre` (research.md, Decisión 1); validar que cada `fueroId` exista en `fueros` (`400` si no, sin escribir nada); dentro de `conTransaccion`: reemplazar `organismo_fueros` (DELETE + INSERT) y actualizar `estado_fueros` (`'sin_fueros_asignados'` si `fueroIds` queda vacío, `'cargado'` en cualquier otro caso — nunca `'multifuero_sin_detalle'`, research.md Decisión 2); responder con la misma forma que el `GET` de esta subruta.
-- [ ] T005 [P] [US1] `frontend/src/api/fuero.ts`: agregar `actualizarFuero(orgId, fueroIds)` (`PUT`) y `useActualizarFuero(orgId)` (invalida `['organismos', orgId, 'fuero']` al tener éxito).
-- [ ] T006 [US1] `frontend/src/routes/organismos/DatosTab.tsx`: reemplazar el párrafo de solo lectura (`data-testid="fuero-solo-lectura"`) por una lista de casillas sobre `useFueros()` (catálogo real), precargada desde `useFuero(orgId)`; guardar llama a `useActualizarFuero` (T005) y muestra el `fueroSimplificado` que devuelve la respuesta — mismo patrón de mensaje de éxito/error que ya usa el resto de la pestaña (`data-testid="mensaje-datos"`).
-- [ ] T007 [US1] `frontend/tests/e2e/organismos.spec.ts`: actualizar el test 7 ("fuero solo lectura") — el `data-testid="fuero-solo-lectura"` desaparece; adaptar la aserción al control nuevo (o mover esa verificación puntual a un test de fuero dedicado si el existente deja de tener sentido tal cual).
+- [x] T004 [US1] `backend/src/routes/organismos.ts`: agregar `PUT /api/organismos/:orgId/fuero` (body `{ fueroIds: number[] }`, `Type.Array(Type.Integer())`) — autorización con `autorizarContraOrganismoPadre` (research.md, Decisión 1); validar que cada `fueroId` exista en `fueros` (`400` si no, sin escribir nada); dentro de `conTransaccion`: reemplazar `organismo_fueros` (DELETE + INSERT) y actualizar `estado_fueros` (`'sin_fueros_asignados'` si `fueroIds` queda vacío, `'cargado'` en cualquier otro caso — nunca `'multifuero_sin_detalle'`, research.md Decisión 2); responder con la misma forma que el `GET` de esta subruta.
+- [x] T005 [P] [US1] `frontend/src/api/fuero.ts`: agregar `actualizarFuero(orgId, fueroIds)` (`PUT`) y `useActualizarFuero(orgId)` (invalida `['organismos', orgId, 'fuero']` al tener éxito).
+- [x] T006 [US1] `frontend/src/routes/organismos/DatosTab.tsx`: reemplazar el párrafo de solo lectura (`data-testid="fuero-solo-lectura"`) por una lista de casillas sobre `useFueros()` (catálogo real), precargada desde `useFuero(orgId)`; guardar llama a `useActualizarFuero` (T005) y muestra el `fueroSimplificado` que devuelve la respuesta — mismo patrón de mensaje de éxito/error que ya usa el resto de la pestaña (`data-testid="mensaje-datos"`).
+- [x] T007 [US1] `frontend/tests/e2e/organismos.spec.ts`: actualizar el test 7 ("fuero solo lectura") — el `data-testid="fuero-solo-lectura"` desaparece; adaptar la aserción al control nuevo (o mover esa verificación puntual a un test de fuero dedicado si el existente deja de tener sentido tal cual).
 
 **Checkpoint**: US1 completa y probada — un organismo puede pasar de "sin
 fueros" a un fuero único, a multifuero, y de vuelta a vacío, con el
@@ -74,11 +74,11 @@ Historia 2).
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T008 [US2] Mismo archivo que T002: crear una unidad funcional con una asignación de jueces (`unidad_funcional_grupo_jueces` + `asignacion_fueros`) acotada a un fuero del organismo; `PUT` sin ese fuero → `400` con `fuerosEnUso` incluyendo ese fuero, y el listado/`estado_fueros` sin cambios (verificado contra la base); quitar/ampliar la asignación primero y reintentar el mismo `PUT` → `200`, se aplica.
+- [x] T008 [US2] Mismo archivo que T002: crear una unidad funcional con una asignación de jueces (`unidad_funcional_grupo_jueces` + `asignacion_fueros`) acotada a un fuero del organismo; `PUT` sin ese fuero → `400` con `fuerosEnUso` incluyendo ese fuero, y el listado/`estado_fueros` sin cambios (verificado contra la base); quitar/ampliar la asignación primero y reintentar el mismo `PUT` → `200`, se aplica.
 
 ### Implementation for User Story 2
 
-- [ ] T009 [US2] Mismo archivo que T004: antes de la transacción de T004, calcular qué fueros del listado actual desaparecerían con el `fueroIds` nuevo, y si alguno tiene una fila en `asignacion_fueros` para una unidad funcional de este organismo, `throw new ErrorNegocio(400, ...)` con el mensaje y `fuerosEnUso` (contracts/api.md) — ninguna escritura ocurre en ese caso.
+- [x] T009 [US2] Mismo archivo que T004: antes de la transacción de T004, calcular qué fueros del listado actual desaparecerían con el `fueroIds` nuevo, y si alguno tiene una fila en `asignacion_fueros` para una unidad funcional de este organismo, `throw new ErrorNegocio(400, ...)` con el mensaje y `fuerosEnUso` (contracts/api.md) — ninguna escritura ocurre en ese caso.
 
 **Checkpoint**: US1 y US2 completas — la pantalla nueva funciona y no
 puede romper una asignación de jueces existente.
@@ -87,11 +87,11 @@ puede romper una asignación de jueces existente.
 
 ## Phase 4: Polish & Cross-Cutting Concerns
 
-- [ ] T010 [P] `backend/scripts/detectar-fueros-sin-poblar.ts` (research.md, Decisión 3): script de una sola vez, mismo patrón que `normalizar-denominaciones.ts` (dry-run por defecto) — busca organismos `estado_fueros = 'cargado'` con 0 filas en `organismo_fueros` y los lista (no rellena nada: no hay de dónde copiar el valor). Correrlo y confirmar que reporta 0 casos (verificado en research.md al planificar; confirmar que sigue en 0 al implementar).
-- [ ] T011 Correr toda la suite backend (`npm test`) y frontend (`npx vitest run`, `npx tsc -b`) — confirmar 0 regresiones sobre la línea base de T001.
-- [ ] T012 Correr la suite E2E de Playwright relevante (`organismos.spec.ts` como mínimo; revisar si `evidencia-visual.spec.ts` u otro toca el detalle de organismo) contra una instancia propia si hace falta (mismo criterio que `010`, T020) — confirmar que el resto de `DatosTab` (denominación, tipo, provincia) sigue funcionando igual.
-- [ ] T013 Recorrer `quickstart.md` completo (los 9 escenarios).
-- [ ] T014 Actualizar `docs/plan-camino-a-produccion.md`, Fase B: marcar el ítem de "CRUD de `organismo_fueros`" como resuelto por `011`, mismo formato ya usado para cerrar otros ítems de esa fase.
+- [x] T010 [P] `backend/scripts/detectar-fueros-sin-poblar.ts` (research.md, Decisión 3): script de una sola vez, mismo patrón que `normalizar-denominaciones.ts` (dry-run por defecto) — busca organismos `estado_fueros = 'cargado'` con 0 filas en `organismo_fueros` y los lista (no rellena nada: no hay de dónde copiar el valor). Correrlo y confirmar que reporta 0 casos (verificado en research.md al planificar; confirmar que sigue en 0 al implementar).
+- [x] T011 Correr toda la suite backend (`npm test`) y frontend (`npx vitest run`, `npx tsc -b`) — confirmar 0 regresiones sobre la línea base de T001.
+- [x] T012 Correr la suite E2E de Playwright relevante (`organismos.spec.ts` como mínimo; revisar si `evidencia-visual.spec.ts` u otro toca el detalle de organismo) contra una instancia propia si hace falta (mismo criterio que `010`, T020) — confirmar que el resto de `DatosTab` (denominación, tipo, provincia) sigue funcionando igual.
+- [x] T013 Recorrer `quickstart.md` completo (los 9 escenarios).
+- [x] T014 Actualizar `docs/plan-camino-a-produccion.md`, Fase B: marcar el ítem de "CRUD de `organismo_fueros`" como resuelto por `011`, mismo formato ya usado para cerrar otros ítems de esa fase.
 
 ---
 

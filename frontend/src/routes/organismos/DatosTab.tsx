@@ -1,11 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { useParams } from 'react-router'
 import { z } from 'zod'
-import { useFuero } from '@/api/fuero'
+import { useActualizarFuero, useFuero } from '@/api/fuero'
 import { preguntasPorPerder, useActualizarOrganismo, useOrganismo, type PreguntaPorPerder } from '@/api/organismos'
-import { useDenominacionesSimplificadas, useProvincias, useTiposOficina } from '@/api/catalogos.hooks'
+import { useDenominacionesSimplificadas, useFueros, useProvincias, useTiposOficina } from '@/api/catalogos.hooks'
 import { useSesion } from '@/auth/useSesion'
 import SelectCatalogo from '@/components/forms/SelectCatalogo'
 import {
@@ -13,8 +13,10 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 const Esquema = z.object({
   denominacion: z.string().trim().min(1, 'Ingresá la denominación'),
@@ -31,12 +33,22 @@ export default function DatosTab() {
   const { data: organismo } = useOrganismo(orgId)
   const { sesion } = useSesion()
   const fuero = useFuero(orgId)
+  const fueros = useFueros()
+  const actualizarFuero = useActualizarFuero(orgId)
   const provincias = useProvincias()
   const denominaciones = useDenominacionesSimplificadas()
   const tipos = useTiposOficina()
   const actualizar = useActualizarOrganismo(orgId)
   const [pendiente, setPendiente] = useState<{ datos: Valores; preguntas: PreguntaPorPerder[] } | null>(null)
   const [mensaje, setMensaje] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+
+  // 011 (US1): listado de fueros elegido — se inicializa una sola vez con lo que ya tiene el
+  // organismo; después de guardar, `fuero.data` ya refleja lo elegido (useActualizarFuero lo
+  // actualiza en el caché), así que no hace falta volver a sincronizar.
+  const [fuerosElegidos, setFuerosElegidos] = useState<number[] | null>(null)
+  useEffect(() => {
+    if (fuero.data && fuerosElegidos === null) setFuerosElegidos(fuero.data.fueros.map((f) => f.id))
+  }, [fuero.data, fuerosElegidos])
 
   const esAdmin = sesion?.rol === 'admin'
   const form = useForm<Valores>({
@@ -61,6 +73,7 @@ export default function DatosTab() {
         ...(esAdmin ? { provinciaId } : {}),
         ...(confirmar ? { confirmarPerdidaTaxonomia: true } : {}),
       })
+      if (fuerosElegidos !== null) await actualizarFuero.mutateAsync(fuerosElegidos)
       setPendiente(null)
       setMensaje({ tipo: 'ok', texto: 'Cambios guardados.' })
     } catch (e) {
@@ -121,12 +134,36 @@ export default function DatosTab() {
           )}
         />
         <Field>
-          <FieldLabel>Fuero</FieldLabel>
-          <p data-testid="fuero-solo-lectura" className="text-sm text-muted-foreground">
+          <FieldLabel id="fuero-leyenda">Fuero</FieldLabel>
+          {fueros.data && fuerosElegidos !== null ? (
+            <div role="group" aria-labelledby="fuero-leyenda" data-testid="fuero-casillas" className="flex flex-col gap-2">
+              {fueros.data.map((f) => {
+                const id = `fuero-${f.id}`
+                const marcado = fuerosElegidos.includes(f.id)
+                return (
+                  <div key={f.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={id}
+                      checked={marcado}
+                      onCheckedChange={(c) =>
+                        setFuerosElegidos(c === true ? [...fuerosElegidos, f.id] : fuerosElegidos.filter((x) => x !== f.id))
+                      }
+                    />
+                    <Label htmlFor={id} className="font-normal">
+                      {f.nombre}
+                    </Label>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Cargando…</p>
+          )}
+          <p data-testid="fuero-resumen" className="text-sm text-muted-foreground">
             {fuero.data
               ? fuero.data.fueros.length === 0
                 ? 'Sin fuero asignado'
-                : `${fuero.data.fueros.map((f) => f.nombre).join(', ')}${fuero.data.fueroSimplificado ? ` (${fuero.data.fueroSimplificado})` : ''}`
+                : (fuero.data.fueroSimplificado ?? fuero.data.fueros.map((f) => f.nombre).join(', '))
               : 'Cargando…'}
           </p>
         </Field>

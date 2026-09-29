@@ -30,7 +30,7 @@ test.afterAll(() => {
   writeFileSync(process.env.ORG_EVIDENCIA ?? 'test-results/organismos-evidencia.json', JSON.stringify(evidencia, null, 2))
 })
 
-test('7. alta (usuario_normal): provincia fija, aparece en la lista sin recargar, fuero solo lectura', async ({ page }) => {
+test('7. alta (usuario_normal): provincia fija, aparece en la lista sin recargar, sin fuero asignado', async ({ page }) => {
   await entrarUI(page, A)
   await expect(page.getByTestId('organismos-vacio')).toBeVisible()
 
@@ -38,6 +38,8 @@ test('7. alta (usuario_normal): provincia fija, aparece en la lista sin recargar
   await expect(page.locator('#provinciaId')).toBeDisabled()
   await expect(page.locator('#provinciaId')).toContainText(/\S/) // prellenada
   evidencia.provinciaPrellenada = (await page.locator('#provinciaId').textContent())?.trim()
+  // Esta es la pantalla de ALTA (OrganismoNuevoPage.tsx): su propio texto fijo, sin relación con el
+  // control editable nuevo de DatosTab.tsx — no se puede elegir fueros antes de que el organismo exista.
   await expect(page.getByTestId('fuero-solo-lectura')).toContainText('Sin fuero asignado')
   // No existe ningún campo de propietario (FR-004).
   await expect(page.getByLabel(/propietari/i)).toHaveCount(0)
@@ -48,7 +50,7 @@ test('7. alta (usuario_normal): provincia fija, aparece en la lista sin recargar
   await page.getByRole('button', { name: 'Crear organismo' }).click()
   // "a" es una preposición que queda en minúscula salvo que sea la primera palabra.
   await expect(page.getByTestId('titulo-organismo')).toHaveText(`${CAP}org de a`)
-  await expect(page.getByTestId('fuero-solo-lectura')).toContainText('Sin fuero asignado')
+  await expect(page.getByTestId('fuero-resumen')).toContainText('Sin fuero asignado')
 
   // Sin recargar la página: volver por el historial de la SPA (navegación de documento único,
   // sin request de documento). La mutación invalidó la lista, así que ya trae el organismo nuevo.

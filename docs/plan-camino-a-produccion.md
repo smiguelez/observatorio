@@ -168,6 +168,41 @@ A/B/C. No alcanza con "correr en paralelo si hay capacidad": si para el
 corte no está listo, es una regresión visible (tableros existentes sin
 datos) el mismo día del corte, no un backlog pendiente.
 
+**Metabase: CONFIRMADO VIABLE para el Observatorio (2026-09-30).** Tablas,
+distribuciones por provincia y por fuero, y el mapa geográfico por
+provincia funcionando — con CABA incluida, usando
+`provincias-completo.geojson` (repo `observatorio-assets`). Historial del
+mapa, para no perder el porqué:
+
+- Un primer intento —cargar el GeoJSON servido por un HTTP local en
+  `:8088`, confirmado respondiendo `200 OK` con `curl` desde el propio
+  servidor— falló: Metabase no logró leerlo por ningún camino probado
+  (`localhost`, `127.0.0.1`, la IP interna del contenedor). Causa raíz
+  confirmada: el filtro de seguridad de Metabase bloquea cualquier
+  variante de acceso a la propia máquina, no solo `localhost`/`127.0.0.1`
+  literales.
+- Solución: servir el GeoJSON desde un dominio público real
+  (`raw.githubusercontent.com`) en vez de un servidor local. El archivo
+  final usado es `provincias-completo.geojson` (con CABA), no el
+  `provincias-sin-antartida.geojson` del intento anterior — ambos
+  recortados del reclamo antártico a partir de la fuente
+  `NickCis/argentina-provincias-geojson.js`.
+- El mapeo entre el id numérico de ese archivo (p. ej. `"06"` para Buenos
+  Aires) y `provincias.codigo_iso` (ISO 3166-2, p. ej. `AR-B`) ya cargada
+  en la base quedó resuelto — el mapa ya funciona con datos reales.
+
+**Pendiente, no bloqueante:** zoom interactivo sobre CABA en el mapa (por
+su tamaño en el mapa del país completo).
+
+**Lo que falta antes de migrar en serio:** **D2** sigue sin resolverse,
+pero ya no es un punto ciego — `docs/inventario-tableros-actuales.md`
+(2026-09-30) documenta los 4 dashboards que existen hoy en Looker Studio.
+Ese inventario es solo **descriptivo**: registra qué se ve en cada
+tablero, no cómo se arma. Confirmar que Metabase sirve, más este
+inventario, todavía no alcanza para migrar — siguen sin definir la
+consulta SQL exacta detrás de cada visualización y la prioridad de
+migración (qué tablero va primero).
+
 ---
 
 ## Fase E — Infraestructura de producción real

@@ -136,7 +136,7 @@ export default function DatosTab() {
         <Field>
           <FieldLabel id="fuero-leyenda">Fuero</FieldLabel>
           {fueros.data && fuerosElegidos !== null ? (
-            <div role="group" aria-labelledby="fuero-leyenda" data-testid="fuero-casillas" className="flex flex-col gap-2">
+            <div role="group" aria-labelledby="fuero-leyenda" data-testid="fuero-casillas" className="grid grid-cols-2 gap-2">
               {fueros.data.map((f) => {
                 const id = `fuero-${f.id}`
                 const marcado = fuerosElegidos.includes(f.id)

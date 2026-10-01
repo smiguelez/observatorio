@@ -593,3 +593,27 @@ frontend de esta entrada siguen pendientes de la Fase B (fuera del alcance de `0
   las demás sesiones se cierren y que la cookie de la sesión actual rote. El restablecimiento por correo
   (`request-password-reset`) sigue deshabilitado a propósito hasta el envío real de email (Fase C).
 - Los controles de UI correspondientes (rol y provincia editables, pantalla de primer acceso) son de la Fase B.
+
+---
+
+**D21 — `pg_hba.conf` con `trust` en local y `127.0.0.1`/`::1` desde el aprovisionamiento del servidor (`foros-ubuntu`, hallazgo del 2026-09-29): RESUELTA (2026-09-29).**
+
+No es algo que el proyecto haya configurado: el archivo realmente usado por el proceso (`SHOW hba_file` →
+`/var/lib/postgresql/16/main/pg_hba.conf`, confirmado antes de tocar nada — no el de `/etc/postgresql/16/main/`, que
+es solo la plantilla del paquete, sin efecto) traía `trust` en `local`, `127.0.0.1/32`, `::1/128` y replicación desde
+que se aprovisionó el servidor. Cualquier conexión local a Postgres, de cualquier rol (`observatorio_app`,
+`metabase_ro`, el propio `postgres`), entraba sin pedir contraseña — acceso completo a la base para quien tuviera
+acceso local a la máquina o una conexión TCP a `127.0.0.1`/`::1`, sin que ninguna credencial lo protegiera.
+
+**Resolución (2026-09-29)**: corregido el archivo activo a `peer` en las líneas `local` y `scram-sha-256` en las de
+`127.0.0.1`/`::1` — mismo contenido que ya tenía, sin usarse, el `pg_hba.conf` de `/etc/postgresql/16/main/` (que
+además incluía la línea estándar `local all postgres peer`, ausente en el activo, y que también se restauró).
+Recargado con `pg_ctl reload` (sin reiniciar el servicio). Verificado después de la recarga: `observatorio_app` y
+`metabase_ro` ahora exigen contraseña (antes entraban sin ninguna); `observatorio_app` con la contraseña real de
+`DATABASE_URL` sigue conectando; el acceso local del superusuario `postgres` por socket (`peer`) sigue funcionando; el
+backend en `:3000` (misma `DATABASE_URL`, sin cambios) sigue respondiendo con normalidad. Backup del archivo original
+conservado en el propio servidor (`/var/lib/postgresql/16/main/pg_hba.conf.bak-20260929195655`).
+
+**Relevante para la Fase E** del plan hacia producción (`docs/plan-camino-a-produccion.md`): antes del corte real hay
+que confirmar que el servidor de producción no tenga esta misma configuración por defecto — no hay ninguna razón para
+asumir que un aprovisionamiento nuevo no repita el mismo `trust` de fábrica.

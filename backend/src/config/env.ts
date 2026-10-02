@@ -59,6 +59,24 @@ export function loadOrigenFrontend(): string {
   return required('BETTER_AUTH_URL')
 }
 
+// Fase D (reporting): sincronización Postgres -> Google Sheets (scripts/reportes-sheets/). La
+// credencial de la cuenta de servicio de Google vive FUERA del repo (Principio XIII) — acá solo se
+// carga la RUTA al archivo (no es secreta en sí misma) desde una variable de entorno, nunca
+// hardcodeada. `metabaseRoUrl` es la misma conexión de solo lectura que ya usa Metabase.
+export interface ReportingSheetsConfig {
+  metabaseRoUrl: string
+  keyFile: string
+  spreadsheetId: string
+}
+
+export function loadReportingSheetsConfig(): ReportingSheetsConfig {
+  return {
+    metabaseRoUrl: required('METABASE_RO_DATABASE_URL'),
+    keyFile: required('GOOGLE_SHEETS_KEY_FILE'),
+    spreadsheetId: required('GOOGLE_SHEETS_REPORTING_ID'),
+  }
+}
+
 // 007 (FR-016/FR-022): vigencia del acceso inicial que un admin entrega a mano
 // (no hay envío de correo hasta la Fase C, por eso se mide en horas).
 export function loadAccesoInicialTtlHoras(): number {

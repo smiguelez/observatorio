@@ -16,7 +16,8 @@
     "migrate:auth": "tsx scripts/migrate-auth.ts",
     "migrate:public": "tsx scripts/migrate-public.ts",
     "normalizar:denominaciones": "tsx scripts/normalizar-denominaciones.ts",
-    "detectar:fueros-sin-poblar": "tsx scripts/detectar-fueros-sin-poblar.ts"
+    "detectar:fueros-sin-poblar": "tsx scripts/detectar-fueros-sin-poblar.ts",
+    "reportes:sincronizar": "tsx scripts/reportes-sheets/sincronizar.ts"
   },
   "dependencies": {
     "@fastify/cookie": "11.0.2",
@@ -24,6 +25,7 @@
     "@sinclair/typebox": "^0.34.52",
     "better-auth": "^1.3.29",
     "fastify": "^5.2.1",
+    "google-auth-library": "^11.1.0",
     "kysely": "^0.28.17",
     "pg": "^8.13.1"
   },

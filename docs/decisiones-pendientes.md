@@ -172,6 +172,15 @@ que el total del pool — los subconjuntos y el acceso completo al mismo pool
 se **solapan a propósito** (UF1 ve 3 de los mismos 10 que UF3 ve completos),
 no se reparten en porciones disjuntas.
 
+*Nota (2026-09-30, al implementar `vista_kpis_generales` para la Fase D):* el
+agregado nacional de jueces asistidos con esta regla da **1975** — el mismo
+número que ya mostraba el dashboard viejo de Looker Studio. No es casualidad:
+Santi había armado a mano, en BigQuery, una tabla propia con su propia lógica
+de deduplicación de pools compartidos. Son dos lógicas distintas (la manual
+vieja, la del modelo D8 nueva) que resuelven correctamente el mismo problema
+y coinciden — no una validación casual ni un error de ninguna de las dos
+puntas.
+
 **Fuero por asignación, no por UF ni por pool (RESUELTO, 2026-09).** Confirmado
 por Santi: hay pools compartidos entre UF de distinto fuero, y el caso extremo
 es un subconjunto de un pool que en la UF de origen tiene tres fueros pero ese

@@ -27,10 +27,13 @@ migración de Postgres correspondiente (`backend/migrations/`).
 ## Cómo agregar un reporte nuevo (de punta a punta)
 
 1. **Crear la vista SQL** — una migración nueva en `backend/migrations/`
-   (mismo patrón que `0005_vistas_reporting_dashboard1.ts`: `CREATE VIEW`
-   vía Kysely + `sql` tag, con `up`/`down`, documentando en el comentario
-   de dónde sale cada columna y qué reemplaza del dashboard original).
-   Correrla con `npm run migrate:public`.
+   (mismo patrón que `0005_vistas_reporting_dashboard1.ts` /
+   `0007_vistas_detalle_dashboard1.ts`: `CREATE VIEW` vía Kysely + `sql`
+   tag, con `up`/`down`, documentando en el comentario de dónde sale cada
+   columna y qué reemplaza del dashboard original). **De detalle, no
+   agregada** — ver la sección "Patrón: mandar detalle, no agregado" más
+   abajo antes de escribir un `GROUP BY` en la vista. Correrla con
+   `npm run migrate:public`.
 2. **Agregar una línea a `config.ts`**: `{ vista: 'nombre_de_la_vista',
    hoja: 'Nombre de la pestaña' }`. Nada más — no hace falta tocar
    `postgres.ts`, `sheets.ts` ni `sincronizar.ts`.
@@ -62,6 +65,118 @@ Salida: una línea `OK`/`FALLÓ` por pestaña, y un resumen final
 código de salida distinto de cero (para que un cron futuro lo note sin
 tener que parsear el log) — las que sí funcionaron ya quedaron escritas,
 no se revierten.
+
+## Patrón: mandar detalle, no agregado (para que Looker Studio filtre cruzado)
+
+Corrección hecha en `0007_vistas_detalle_dashboard1.ts` sobre el diseño
+original de 0005. Documentado acá para no repetir el error al agregar un
+reporte nuevo.
+
+**El problema**: `vista_organismos_por_tipo`, `vista_organismos_por_fuero`
+y `vista_organismos_por_provincia` (0005) agregaban en SQL (`GROUP BY`) —
+cada una llegaba a Sheets/Looker ya convertida en un número fijo por
+categoría. Looker Studio filtra y cruza en el propio Looker (p. ej.
+"mostrar organismos por tipo, filtrado a una sola provincia"), no
+recalculando SQL — si la fila que le llega ya viene agrupada solo por
+tipo, no tiene de dónde sacar el desglose por provincia que un filtro
+cruzado necesitaría. El síntoma es un gráfico que no reacciona a un
+filtro, o que reacciona mal.
+
+**La regla**: mandar una fila por **entidad real** (un organismo, una
+asignación), con sus columnas de catálogo sin tocar, y dejar que Looker
+Studio agregue (`SUM`/`COUNT`/`COUNT DISTINCT` en la configuración del
+propio gráfico) y filtre. `vista_organismos_detalle` reemplaza a las tres
+vistas agregadas: una fila por organismo, con `tipo_oficina`,
+`fuero_simplificado`, `provincia` y `codigo_iso` ya resueltos pero sin
+ningún `GROUP BY` — el mismo dato de catálogo que antes, a nivel de
+detalle en vez de pre-contado.
+
+**La excepción — pensar la granularidad con cuidado**: esta regla no es
+automática cuando el valor real vive en una **entidad distinta** de la
+que se usa para filtrar. `jueces_asistidos` es el ejemplo: el número
+real (`total_jueces`) es un atributo del **grupo de jueces**, pero lo que
+se quiere filtrar/cruzar en el dashboard es por **organismo/UF** — y un
+mismo grupo puede estar asignado a varias UF (D8/FR-018e). Mandar el
+detalle "ingenuo" (una fila por asignación UF↔grupo, sumando
+`total_jueces` a lo bruto) sobrecuenta exactamente igual que ya advertía
+0005 para el cálculo viejo del dashboard (un grupo compartido entre 3 UF
+suma su `total_jueces` tres veces). La solución en `vista_jueces_por_grupo`
+no es agregar en SQL (eso traería de vuelta el problema original de
+filtros), sino exponer el `grupo_jueces_id` como columna explícita: cada
+fila sigue siendo detalle (una por asignación, filtrable por organismo),
+pero quien construye el gráfico en Looker puede optar por contar grupos
+**únicos** (`COUNT DISTINCT grupo_jueces_id`, o un gráfico aparte que
+agrupe por `grupo_jueces_id` antes de sumar) en vez de sumar
+`total_jueces` fila por fila. La granularidad correcta depende de qué
+pregunta responde el gráfico — no hay una única vista que sirva para
+"total de jueces" y para "jueces por organismo" al mismo tiempo sin que
+alguien en Looker tome esa decisión explícitamente.
+
+**`jueces_contables` (0009): la misma exposición explícita, pero sin
+depender de que quien construye el gráfico se acuerde de deduplicar.**
+`COUNT DISTINCT grupo_jueces_id` resuelve "cuántos grupos", no "cuántos
+jueces" — un `SUM(total_jueces)` sigue sobrecontando si alguien arma un
+gráfico sin saber de la trampa. `jueces_contables` es `total_jueces` en
+UNA sola fila por `grupo_jueces_id` (la de menor `unidad_funcional_id` —
+orden determinístico, vía `row_number() OVER (PARTITION BY grupo_jueces_id
+ORDER BY unidad_funcional_id)`) y `0` en el resto de las filas del mismo
+grupo. Con esto, `SUM(jueces_contables)` da el total correcto con
+**cualquier** filtro (por organismo, por provincia, sin filtro) sin que
+el autor del gráfico tenga que saber nada de grupos compartidos —
+siempre que el filtro no excluya justo la fila "contable" de un grupo
+(no pasa hoy: ver la condición de abajo). `total_jueces` sigue existiendo
+sin tocar, para quien quiera el total real del grupo fila por fila.
+
+Condición para que `jueces_contables` sea correcto por provincia: ningún
+grupo compartido puede cruzar provincias (si la UF "contable" de un
+grupo quedara en una provincia distinta de otra UF que también usa ese
+grupo, atribuirle todo el total a una sola fila distorsionaría el
+desglose por provincia). Verificado contra la base real al escribir
+0009 (2026-10-04): 0 discrepancias — la provincia de cada UF
+(`localidades.provincia_id`) coincide siempre con `grupos_jueces.provincia_id`
+del grupo que usa, para los 266 registros de la vista. Coincide con
+V3.11 de `001-modelo-datos-relacional`. Si una carga futura de datos
+rompiera esto (un grupo compartido entre UF de provincias distintas),
+`jueces_contables` seguiría sumando bien el total general pero el
+desglose por provincia quedaría mal — revisar esta condición de nuevo
+si se vuelve a tocar esta vista.
+
+Verificado también: `SUM(jueces_contables) = 1975` (coincide con
+`vista_kpis_generales.jueces_asistidos`, D8/FR-018e) y, filtrando por
+cada una de las 20 provincias con jueces asignados, `SUM(jueces_contables)`
+coincide exactamente con el total de esa provincia calculado por grupo
+(sin duplicar grupos compartidos).
+
+`vista_kpis_generales` no se tocó: es un KPI agregado genuino (un total
+único, una sola fila), no un catálogo por entidad — no hay "detalle" al
+que bajarla.
+
+**Regresión conocida y aceptada**: el mapa coroplético pierde el "0
+explícito" para una provincia sin ningún organismo (hoy: La Rioja y Santa
+Cruz). `vista_organismos_por_provincia` partía del catálogo de provincias
+con `LEFT JOIN` a organismos, así que esas dos aparecían con
+`organismos = 0` (ver nota de color de 0 en Looker, más abajo).
+`vista_organismos_detalle` parte de `organismos`, así que una provincia
+sin ningún organismo no tiene ninguna fila — queda ausente del mapa en
+vez de en cero (Looker la va a mostrar como "sin dato", un color distinto
+al blanco documentado para el cero explícito). Aceptado a cambio de que
+el resto del dashboard pueda filtrarse cruzado; recuperar el cero
+explícito es trabajo futuro (un blend en el propio Looker Studio contra
+el catálogo completo de provincias).
+
+**Las vistas/pestañas viejas NO se borraron — conviven a propósito.**
+Primer intento de esta corrección (0007) había eliminado
+`vista_organismos_por_tipo`/`por_fuero`/`por_provincia`; se revirtió en
+`0008_restaurar_vistas_agregadas_dashboard1.ts` porque esas tres siguen
+activas, alimentando el reporte de Looker Studio **actual**, todavía en
+uso — borrarlas de entrada rompía ese reporte antes de que el nuevo (con
+filtros cruzados, sobre las vistas de detalle) estuviera listo para
+reemplazarlo. `config.ts` hoy sincroniza las 6 pestañas a la vez: las 3
+agregadas viejas + `vista_kpis_generales` + las 2 de detalle nuevas —
+sumadas, no reemplazadas. Las 3 agregadas viejas se eliminan en una tarea
+aparte (una migración nueva, no se edita 0007/0008), recién cuando el
+dashboard nuevo reemplace por completo al actual — ahí también se sacan
+sus 3 líneas de `config.ts`.
 
 ## Cron (corrida automática, 2x por día)
 

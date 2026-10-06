@@ -1,7 +1,38 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 import { writeFileSync } from 'node:fs'
 import { asignarProvincia, CLAVE, crearUsuarioConClave, limpiarFixtures, PREFIJO, sesionApi, sql } from './helpers/backend'
 import { entrarUI } from './helpers/ui'
+
+// Mismo override que ya usan los helpers de backend (`E2E_ORIGEN_URL`) para el ORIGEN que el
+// navegador real visita en 25d — no el `baseURL` del config (que apunta a localhost:5173). El
+// bridge Fastify->Better Auth solo confía en el origen de `BETTER_AUTH_URL`; si ese valor es un
+// túnel (como en este entorno de desarrollo), un navegador real entrando por localhost:5173 nunca
+// pasa el login (403 Invalid Origin) sin que esto tenga nada que ver con el bug que prueba 25d.
+const ORIGEN_NAVEGADOR = process.env.E2E_ORIGEN_URL ?? 'http://localhost:5173'
+
+/**
+ * Ningún elemento visible DENTRO del diálogo puede sobresalir de su propio borde (desborde
+ * horizontal: el link largo de "Ingresar con Google..." empujaba el ancho del diálogo más allá de
+ * la tarjeta). Tolerancia de 1px por redondeo de subpíxel. Devuelve la lista de infractores (vacía
+ * si todo entra) en vez de aserciones una por una, para un mensaje de fallo útil.
+ */
+async function hijosQueSobresalen(dialogo: Locator): Promise<{ tag: string; texto: string; delta: number }[]> {
+  return dialogo.evaluate((el) => {
+    const caja = el.getBoundingClientRect()
+    const infractores: { tag: string; texto: string; delta: number }[] = []
+    for (const hijo of el.querySelectorAll<HTMLElement>('*')) {
+      const r = hijo.getBoundingClientRect()
+      if (r.width === 0 || r.height === 0) continue // sr-only / no renderizado
+      const deltaDerecha = r.right - caja.right
+      const deltaIzquierda = caja.left - r.left
+      const delta = Math.max(deltaDerecha, deltaIzquierda)
+      if (delta > 1) {
+        infractores.push({ tag: hijo.tagName, texto: (hijo.textContent ?? '').trim().slice(0, 60), delta })
+      }
+    }
+    return infractores
+  })
+}
 
 const A = `${PREFIJO}venc-a@example.test`
 const B = `${PREFIJO}venc-b@example.test`
@@ -95,4 +126,35 @@ test('25c. quien entra por Google/enlace: lo lleva al login con returnTo y le av
   await expect(dialogo).toBeVisible()
   await dialogo.getByRole('button', { name: /Ingresar con Google o con un enlace/ }).click()
   await expect(page).toHaveURL(new RegExp(`/login\\?returnTo=%2Forganismos%2F${orgId}`))
+})
+
+test('25d. el diálogo de sesión vencida no desborda su propia tarjeta, ni ancho ni angosto', async ({ page }) => {
+  // Navegación por URL ABSOLUTA (no relativa al `baseURL` del config) — ver ORIGEN_NAVEGADOR arriba.
+  await page.goto(`${ORIGEN_NAVEGADOR}/login`)
+  await page.getByLabel('Email', { exact: true }).fill(A)
+  await page.getByLabel('Contraseña', { exact: true }).fill(CLAVE)
+  await page.getByRole('button', { name: 'Ingresar' }).click()
+  await expect(page).toHaveURL(/\/organismos$/)
+  await page.goto(`${ORIGEN_NAVEGADOR}/organismos/${orgId}`)
+  // El formulario real (no el esqueleto de carga) tiene que estar montado ANTES de cortar la
+  // sesión — por el túnel hay más latencia de red que contra localhost (que usan 25a/25b/25c) y
+  // cortar la sesión mientras todavía está cargando hace que el botón se desmonte/remonte en loop.
+  await expect(page.getByLabel('Denominación', { exact: true })).toBeVisible()
+  await page.context().clearCookies()
+  await page.getByRole('button', { name: 'Guardar cambios' }).click()
+  const dialogo = page.getByTestId('sesion-vencida')
+  await expect(dialogo).toBeVisible()
+
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.screenshot({ path: process.env.VENC_DESBORDE_1280_PNG ?? 'test-results/sesion-vencida-1280.png' })
+  const infractores1280 = await hijosQueSobresalen(dialogo)
+  evidencia.infractores1280 = infractores1280
+
+  await page.setViewportSize({ width: 375, height: 700 })
+  await page.screenshot({ path: process.env.VENC_DESBORDE_375_PNG ?? 'test-results/sesion-vencida-375.png' })
+  const infractores375 = await hijosQueSobresalen(dialogo)
+  evidencia.infractores375 = infractores375
+
+  expect(infractores1280, `elementos que sobresalen a 1280px: ${JSON.stringify(infractores1280)}`).toEqual([])
+  expect(infractores375, `elementos que sobresalen a 375px: ${JSON.stringify(infractores375)}`).toEqual([])
 })

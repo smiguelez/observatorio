@@ -41,14 +41,24 @@ export default function SesionVencidaDialog() {
   return (
     <Dialog open={vencida} onOpenChange={() => { /* no se cierra sin re-ingresar: cualquier guardado fallaría */ }}>
       <DialogContent showCloseButton={false} data-testid="sesion-vencida" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
-        <DialogHeader>
+        <DialogHeader className="min-w-0">
           <DialogTitle>Tu sesión venció</DialogTitle>
           <DialogDescription>
             Volvé a ingresar para poder guardar. Lo que escribiste sigue en la pantalla y no se pierde.
           </DialogDescription>
         </DialogHeader>
-        <PasswordForm alExito={alReingresar} alElegirOtroMetodo={irAlLogin} />
-        <Button type="button" variant="link" className="self-start px-0" onClick={irAlLogin}>
+        {/* min-w-0: DialogContent es `grid` — sin esto, un hijo con contenido ancho (antes: el
+            Button de abajo con el texto largo en una sola línea) fuerza la columna implícita del
+            grid más ancha que el diálogo y desborda la tarjeta. */}
+        <div className="min-w-0">
+          <PasswordForm alExito={alReingresar} alElegirOtroMetodo={irAlLogin} />
+        </div>
+        <Button
+          type="button"
+          variant="link"
+          className="h-auto min-w-0 justify-start self-start px-0 text-left whitespace-normal"
+          onClick={irAlLogin}
+        >
           Ingresar con Google o con un enlace (se pierde lo que no guardaste)
         </Button>
       </DialogContent>

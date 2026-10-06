@@ -147,6 +147,168 @@ cada una de las 20 provincias con jueces asignados, `SUM(jueces_contables)`
 coincide exactamente con el total de esa provincia calculado por grupo
 (sin duplicar grupos compartidos).
 
+### `vista_unidades_funcionales_detalle` (0010): el mismo problema, otro modelo de reparto
+
+`jueces_contables` (arriba) funciona para filtrar por organismo o por
+provincia completos, pero no sirve para un dashboard que filtra por **UF
+individual** — una sola fila "contable" por grupo deja a todas las demás
+UF de ese grupo en 0, así que filtrar a una de esas UF "no contables" da
+jueces = 0 aunque esa UF sí tenga acceso real al grupo.
+`vista_unidades_funcionales_detalle` resuelve esto con otro reparto:
+**prorratear** el total del grupo en partes iguales entre las UF
+distintas que lo usan (`jueces_prorrateados = total_jueces / ufs_del_grupo`,
+sin ponderar por `cantidad_asignada` — a propósito, por pedido explícito:
+una UF con una asignación chica no vale menos a los fines de este
+reparto). Así cualquier UF individual tiene un número de jueces
+"propio" y filtrar por cualquier subconjunto de UF da un total
+razonable, a costa de un número no entero.
+
+**Cuándo usar cuál**:
+
+| Si el dashboard filtra por... | Usar |
+|---|---|
+| Organismo o provincia completos (nunca por una UF sola) | `vista_jueces_por_grupo` + `jueces_contables` (0009) — más simple, números enteros. |
+| UF individual (o una mezcla de UF de distintos organismos) | `vista_unidades_funcionales_detalle` + `jueces_prorrateados` (0010). |
+
+**Granularidad**: una fila por (UF, asignación a grupo) — `organismos
+LEFT JOIN unidades_funcionales LEFT JOIN unidad_funcional_grupo_jueces`,
+encadenados a propósito para que nada desaparezca: un organismo sin
+ninguna UF aparece una vez (UF nula); una UF sin ninguna asignación
+aparece una vez (grupo nulo, `jueces_prorrateados = 0`).
+
+**Columnas**: además de `jueces_prorrateados`, trae el resto del detalle
+que ya traía `vista_organismos_detalle` (`tipo_oficina`,
+`fuero_simplificado`, `provincia`, `codigo_iso`) sumado a los datos
+propios de la UF (`denominacion_unidad`, `tipo_uf`, `localidad`,
+`localidad_id` — agregada en 0012, ver nota abajo) y del grupo
+(`grupo_jueces_id`, `total_jueces`, `ufs_del_grupo` — el denominador del
+reparto, expuesto para quien quiera verlo).
+
+**`localidad_id` (0012) — las localidades se cuentan por id, no por
+nombre.** El nombre de una localidad no es único en el país: hay más de
+una "Mercedes", más de una "Santa Rosa", más de una "San Martín" (cada
+una en una provincia distinta). Agrupar o contar por la columna
+`localidad` (el nombre) en Looker Studio sobrecuenta — dos localidades
+homónimas en provincias distintas colapsan en una sola categoría. Para
+"cuántas localidades distintas" (o cualquier agrupación por localidad)
+usar siempre `localidad_id`, nunca `localidad` — mismo criterio que ya
+usa `vista_kpis_generales.localidades_con_organismo` (cuenta por
+`localidad_id`). Confirmado al agregar la columna (2026-10-04):
+`COUNT(DISTINCT localidad_id)` en esta vista = 122, igual a
+`vista_kpis_generales.localidades_con_organismo`; y en el catálogo de
+localidades, "Mercedes", "Santa Rosa" y "San Martín" aparecen cada una 2
+veces (2 `localidad_id` distintos por nombre) — el ejemplo concreto de
+por qué el nombre solo no alcanza.
+
+**Cómo armar el mapa de UF en Looker Studio (0014).** Tres columnas
+nuevas, pensadas para un mapa a nivel de UF individual (no el mapa
+coroplético por provincia, que usa `vista_organismos_por_provincia`/
+`vista_organismos_detalle`):
+
+- **`domicilio_completo`** (`domicilio, localidad, provincia` — la
+  provincia de la LOCALIDAD de la UF, vía `localidades.provincia_id`,
+  no la del organismo) da el nivel de detalle de calle. Es el campo a
+  usar primero: Looker Studio geocodifica una dirección de texto
+  razonablemente bien. NULL cuando `domicilio` está vacío o sin
+  cargar (no solo ausente la columna) — un domicilio en blanco no es
+  una dirección usable aunque localidad y provincia sí se conozcan.
+- **`lat_long_localidad`** (texto `"lat,long"`, tipo geográfico
+  "Latitud, Longitud" en Looker Studio) es el **respaldo** para cuando
+  `domicilio_completo` es NULL: ubica la UF en su localidad (no en la
+  dirección exacta — es la coordenada de la localidad entera, cargada
+  una sola vez por localidad, no por UF), pero nunca es NULL mientras
+  la UF exista (`localidades.latitud`/`longitud` son `NOT NULL` en el
+  dominio). `latitud_localidad`/`longitud_localidad` quedan aparte como
+  numéricos sueltos, por si hace falta alguna de las dos coordenadas
+  solas en vez del texto combinado.
+- **Contar UF en el mapa**: siempre `COUNT(DISTINCT unidad_funcional_id)`,
+  nunca `COUNT(*)` a secas — la vista tiene una fila por (UF, asignación
+  a grupo), así que una UF con 2 asignaciones de jueces aparece 2 veces
+  (mismo motivo por el que `vista_jueces_por_grupo` necesitaba
+  `grupo_jueces_id` explícito: la granularidad de la tabla no es la
+  granularidad de lo que se quiere contar).
+
+**Sin datos de contacto de personas**: `telefono`, `mail` y
+`responsable` de `unidades_funcionales` NO están en esta vista ni se
+van a agregar — son datos de contacto, y la planilla de Sheets es una
+copia de los datos que vive fuera de Postgres (Principio XIII/D15).
+
+Verificado contra la base real al agregar estas columnas (2026-10-05):
+de las 279 filas, 275 tienen `domicilio_completo` no nulo y 4 nulo (la
+fila del organismo sin ninguna UF + 3 UF reales sin domicilio
+utilizable). El resto de 0010/0012 no cambió (279/278/118/1975/122) y
+`metabase_ro` sigue con `SELECT`. `down()` probado contra la base real:
+deja la vista con las 15 columnas exactas de 0012 (sin las 4 nuevas),
+mismos números, grant re-otorgado.
+
+**`denominacion_simplificada` (0015)**: el nombre del catálogo
+`denominaciones_simplificadas` del organismo de cada fila (vía
+`organismos.denominacion_simplificada_id`, `NOT NULL` en el dominio) —
+una categoría de organismo más gruesa/legible que `tipo_oficina`, para
+quien quiera agrupar el mapa de UF por ese criterio en vez de por tipo
+de oficina. Como la columna depende del organismo (siempre presente en
+la base de la vista) y no de la UF, nunca da NULL — ni siquiera en la
+fila del organismo sin ninguna UF. Verificado contra la base real
+(2026-10-05): `0` filas con `denominacion_simplificada` NULL de las 279
+totales. El resto de 0010/0012/0014 no cambió (279/278/118/122/1975) y
+`metabase_ro` sigue con `SELECT`. `down()` probado contra la base real:
+deja la vista con las 19 columnas exactas de 0014 (sin esta), mismos
+números, grant re-otorgado.
+
+**Verificado contra la base real** (2026-10-04):
+
+- `COUNT(DISTINCT unidad_funcional_id)` = 278, igual al total real de UF
+  de la base; `COUNT(DISTINCT organismo_id)` = 118, igual al total real
+  de organismos — ningún organismo ni UF se perdió por los `LEFT JOIN`.
+- Por cada una de las 20 provincias con jueces asignados,
+  `SUM(jueces_prorrateados)` coincide con el total por grupo de esa
+  provincia (misma comparación que ya se hizo para `jueces_contables`).
+- Grupo 317 (compartido entre 2 UF, `total_jueces = 21`): la suma de sus
+  2 fracciones da exactamente 21 — el reparto no pierde ni inventa
+  jueces.
+- `SUM(jueces_prorrateados)` sobre toda la vista da
+  `1974.99999999999999970000`, **no 1975 exacto**. No es un error de
+  lógica: Postgres trunca la división `numeric` de una fracción
+  periódica (p. ej. el grupo 322, `40 jueces / 3 UF = 13.3333333333333333`,
+  truncado a 16 cifras) a una escala finita — sumar varias copias de un
+  truncamiento así (3 × 13.3333333333333333 = 39.9999999999999999, no 40)
+  deja un resto de `~3×10⁻¹⁶`, inevitable en cualquier representación de
+  precisión finita de un número periódico. Pedido explícito: no
+  redondear — así que este resto queda ahí a propósito, visible para
+  quien lea el dato en vez de escondido por un `ROUND()`. Para cualquier
+  uso práctico (un dashboard, un KPI redondeado a enteros) es
+  indistinguible de 1975.
+
+### `vista_usuarios_por_provincia` (0011)
+
+Una fila por usuario — `usuario_id`, `es_admin`, `provincia` (nombre;
+`'Sin provincia'` si `usuarios.provincia_id` es NULL) y `codigo_iso`
+(NULL en ese caso). **Nunca** `email`, `nombre_display`, `foto_url` ni
+ninguna fecha de actividad — nada identificable (Principio XIII/D15).
+`es_admin` usa un `EXISTS` contra `usuario_roles`/`roles`, no un `JOIN`
+directo, para que un usuario con más de un rol no duplique su fila.
+
+Verificado contra la base real (2026-10-04): `COUNT(*) = COUNT(DISTINCT
+usuario_id) = 48` (total real de usuarios, sin duplicados). 3 admins
+(coincide con una consulta directa a `usuario_roles`/`roles`, sin pasar
+por la vista). 0 usuarios en `'Sin provincia'` hoy (los 48 tienen
+provincia declarada) — distribuidos en 22 de las 24 provincias (ninguno
+en La Rioja ni Santa Cruz, consistente con que esas dos tampoco tienen
+organismos). Columnas de la vista confirmadas por catálogo
+(`\d vista_usuarios_por_provincia`): únicamente `usuario_id`, `es_admin`,
+`provincia`, `codigo_iso` — ninguna columna personal.
+
+**Unión con "UF detalle" en Looker Studio**: la clave común es
+`codigo_iso` (ISO 3166-2 de la provincia), no el nombre — mismo criterio
+que ya usa el mapa coroplético para cruzar contra el GeoJSON (ver más
+abajo). Al armar un *blend* en Looker Studio entre "Usuarios por
+provincia" y "UF detalle" (o cualquier otra pestaña con `codigo_iso`),
+usar esa columna como clave de unión evita el problema típico de cruzar
+por nombre de provincia (acentos, mayúsculas, "Ciudad Autónoma de Buenos
+Aires" vs. variantes abreviadas) — un usuario en `'Sin provincia'` queda
+sin `codigo_iso` y por lo tanto fuera de cualquier blend por esa clave, a
+propósito (no hay con qué cruzarlo geográficamente).
+
 `vista_kpis_generales` no se tocó: es un KPI agregado genuino (un total
 único, una sola fila), no un catálogo por entidad — no hay "detalle" al
 que bajarla.
@@ -164,19 +326,37 @@ el resto del dashboard pueda filtrarse cruzado; recuperar el cero
 explícito es trabajo futuro (un blend en el propio Looker Studio contra
 el catálogo completo de provincias).
 
-**Las vistas/pestañas viejas NO se borraron — conviven a propósito.**
-Primer intento de esta corrección (0007) había eliminado
+**Historia de la convivencia, y su baja final (0013).** Primer intento
+de esta corrección (0007) había eliminado
 `vista_organismos_por_tipo`/`por_fuero`/`por_provincia`; se revirtió en
-`0008_restaurar_vistas_agregadas_dashboard1.ts` porque esas tres siguen
-activas, alimentando el reporte de Looker Studio **actual**, todavía en
-uso — borrarlas de entrada rompía ese reporte antes de que el nuevo (con
-filtros cruzados, sobre las vistas de detalle) estuviera listo para
-reemplazarlo. `config.ts` hoy sincroniza las 6 pestañas a la vez: las 3
-agregadas viejas + `vista_kpis_generales` + las 2 de detalle nuevas —
-sumadas, no reemplazadas. Las 3 agregadas viejas se eliminan en una tarea
-aparte (una migración nueva, no se edita 0007/0008), recién cuando el
-dashboard nuevo reemplace por completo al actual — ahí también se sacan
-sus 3 líneas de `config.ts`.
+`0008_restaurar_vistas_agregadas_dashboard1.ts` porque esas tres seguían
+activas, alimentando el reporte de Looker Studio que en ese momento
+todavía era el actual — borrarlas de entrada lo rompía antes de que el
+nuevo (con filtros cruzados, sobre las vistas de detalle) estuviera
+listo para reemplazarlo. Durante esa convivencia, `config.ts` sincronizó
+las 6, y después las 8 pestañas a la vez (agregadas viejas + KPIs + las
+de detalle, sumadas, no reemplazadas).
+
+**Baja definitiva (2026-10-05, `0013_baja_vistas_agregadas_dashboard1.ts`)**:
+una vez que el dashboard nuevo reemplazó por completo al actual, se dieron
+de baja las 4 vistas agregadas — `vista_kpis_generales` incluida, no solo
+las 3 "por_tipo/por_fuero/por_provincia" — ya no existen en Postgres.
+`config.ts` quedó con únicamente las 4 de detalle (`vista_organismos_detalle`,
+`vista_jueces_por_grupo`, `vista_unidades_funcionales_detalle`,
+`vista_usuarios_por_provincia`). Probado `up`/`down` contra la base real:
+`up` borra las 4 y lo confirma por catálogo (`pg_views`); `down` las
+recrea con los mismos números que tenían (`jueces_asistidos = 1975`, 118
+organismos, etc.) y les devuelve el `SELECT` a `metabase_ro` — confirmado
+con `has_table_privilege`, las 4 en `t`.
+
+**Las PESTAÑAS de la planilla no se borraron solas.** El script nunca
+borra una pestaña (no decide qué vistas existen) — "KPIs generales",
+"Organismos por tipo", "Organismos por fuero" y "Organismos por
+provincia" siguen en la planilla con los últimos datos que tenían antes
+de esta baja, y no se van a volver a actualizar. Borrarlas a mano en la
+planilla (y cualquier gráfico de Looker Studio que todavía las usara) es
+un paso manual pendiente, a cargo de quien administre la planilla — no
+hecho automáticamente acá.
 
 ## Cron (corrida automática, 2x por día)
 

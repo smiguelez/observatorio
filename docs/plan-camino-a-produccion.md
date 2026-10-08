@@ -18,6 +18,18 @@ no puede darse por terminada — no que sea lo primero a tocar.
 
 ---
 
+## Reglas operativas
+
+Todo cambio a nivel sistema — `apt`/`apt-get`, `sudo`, edición de algo
+bajo `/etc`, instalación o edición de un crontab — se registra en `docs/`
+**en el momento**, con fecha, el comando exacto y el motivo. No alcanza
+con que quede en el historial de la shell: tiene que quedar legible acá,
+para quien herede el servidor. Un agente (humano o IA) que use `sudo`
+como parte de una tarea lo informa explícitamente en su resumen final,
+aunque la tarea en sí no haya sido sobre infraestructura.
+
+---
+
 ## Fase A — Cerrar `007`: backend de identidad y autorización
 
 **Por qué primero:** es la única fase que toca autenticación real — todo
@@ -216,11 +228,80 @@ endpoints de auth, Fase B cambia pantallas).
   acceso a la cuenta de Cloudflare de `jufejus.org.ar` que ya hace falta
   antes, en Fase C, para verificar el dominio de envío de Resend — si se
   consigue ese acceso para Fase C, ya está disponible acá también.
-- Lista de requerimientos al proveedor de infraestructura (mencionada al
-  principio del proyecto, nunca formalizada).
+- Lista de requerimientos al proveedor de infraestructura: formalizada
+  (2026-10-07) en la subsección de abajo — ya no es un pendiente sin
+  escribir.
 - Gestión de procesos real — hoy backend y frontend corren con `tsx watch`
   / `vite dev`, modo desarrollo; producción necesita `systemd` o
-  equivalente, con reinicio automático ante caída.
+  equivalente, con reinicio automático ante caída. Ver pedido 4, abajo.
+
+### Pedido al proveedor de infraestructura
+
+Hechos verificados el 2026-10-07 sobre el servidor de desarrollo actual
+(`foros-ubuntu`):
+
+- **Supervisión de procesos.** El contenedor es Docker; PID 1 es `sshd`,
+  sin supervisor ni `systemd`. Backend, frontend, el túnel de Cloudflare y
+  la sesión de cron corren en `tmux` o a mano — si el contenedor se
+  reinicia, nada los vuelve a levantar. (El crontab de reportes, 6:00 y
+  12:00, sí funciona mientras el contenedor sigue arriba — ver
+  `docs/runbook-reportes-sheets.md`.)
+- **Disco.** `/` es un overlay de 24 GB, al 100% (22,9 GiB usados, 230 MiB
+  libres). El 2026-09-29 estaba al 95%, con ~1,2 GB libres — se agotó en
+  poco más de una semana. Desde adentro del contenedor, `du -x /` solo
+  explica 1,2 GB (911 MB el 29/9): `/var/log` pesa 1,4 MB, `/tmp` 43 MB,
+  sin archivos borrados retenidos por ningún proceso. Quedan **~21,7 GiB
+  sin explicar** — que los esté usando otro contenedor o el host mismo es
+  una inferencia razonable, no algo confirmado desde adentro.
+- **Postgres sobre el mismo overlay.** El directorio de datos
+  (`/var/lib/postgresql/16/main`) pesa 67 MB; la base en sí, 11 MB —
+  chico hoy, pero vive en el mismo disco al 100% de arriba.
+- **`/home`** es un volumen aparte, 50 GB, 11 GB libres. No se sabe si
+  persiste si el contenedor se recrea (no solo se reinicia).
+- **Hay un backup**, `~/backups/observatorio-2026-10-07.dump` (158 KB,
+  índice legible con `pg_restore -l`, restauración completa NO probada
+  todavía). No está versionado — contiene datos reales (Principio
+  XIII/D15).
+- `pg_hba.conf` venía en `trust` desde el aprovisionamiento inicial del
+  servidor (corregido acá el 2026-09-29, D21).
+
+**Pedidos — 1 a 5 son URGENTES (riesgo real de caída hoy), 6 y 7 son
+previos al corte de Fase F, no urgentes hoy:**
+
+1. **[URGENTE]** Identificar qué consume el espacio de `/` (los ~21,7 GiB
+   sin explicar desde adentro del contenedor) y liberarlo.
+2. **[URGENTE]** Cuota de disco garantizada para este contenedor — hoy
+   puede quedarse sin espacio por algo ajeno a esta aplicación.
+3. **[URGENTE]** Confirmar qué persiste si el contenedor se reinicia o se
+   recrea — tanto `/` como `/home` — hoy no se sabe.
+4. **[URGENTE]** Supervisión de procesos con reinicio automático
+   (entrypoint con `supervisord`/`s6`, o contenedores separados con
+   `restart: unless-stopped`), incluido el cron de reportes.
+5. **[URGENTE]** Backups: snapshots del volumen y de la base, frecuencia,
+   retención y una prueba de restauración real (no solo el índice
+   legible); mover el directorio de datos de Postgres a un volumen
+   persistente, fuera del overlay de `/`.
+6. Mecanismo para inyectar secretos por entorno
+   (`BETTER_AUTH_SECRET`, `DATABASE_URL`, `RESEND_API_KEY`, credenciales
+   de Google) sin dejarlos en el repo — ver también el punto de secretos
+   por entorno ya listado abajo.
+7. Confirmar que la imagen de producción no hereda `pg_hba.conf` en
+   `trust` (ver hecho verificado arriba — ya pasó una vez en este
+   servidor de desarrollo).
+
+**Nota — instalación de paquetes del 2026-10-05, no relacionada con el
+problema de disco de arriba:** a las 22:47, para poder correr los tests
+E2E de un fix de UI contra un navegador real, se instalaron con `sudo
+apt-get install` 87 paquetes de sistema (`libnspr4`, `libnss3`,
+`libasound2t64` y las dependencias gráficas de Chromium para Playwright:
+`xvfb`, fuentes, librerías gráficas), ~360 MB en `/usr`. Son necesarios
+para correr E2E en este servidor de **desarrollo** y **no deben estar en
+la imagen de producción** — los E2E corren en un entorno aparte, nunca en
+el servidor que sirve tráfico real. Esta instalación es ~360 MB; el
+espacio sin explicar de arriba es ~21,7 GiB — no es la causa del problema
+de disco, se anota acá solo por la regla operativa de dejar registrado
+todo cambio a nivel sistema (ver arriba).
+
 - Credenciales OAuth de Google **reales**, de producción, con el dominio
   final registrado como `redirect_uri` — resuelve T030 de la Fase B de
   paso, si se consigue una de desarrollo antes, mejor.
@@ -250,6 +331,49 @@ Firestore, export fresco, ambiente reproducible, detección de anomalías
 conocidas, reconciliación como gate, merge de `reformulacion` a `main`,
 encender la app nueva.
 
+### Día de la baja de la app vieja — lista de tareas
+
+**Prerrequisitos** (sin esto, no se empieza):
+
+- Fase D completa — los 4 tableros migrados y en uso de verdad, no solo
+  técnicamente posible.
+- Fases E y F cerradas (infraestructura real con supervisión/backups, y
+  el propio corte ejecutado — ver arriba).
+- Login con Google funcionando en la app nueva con un cliente OAuth del
+  **proyecto institucional** (`forojufejus@gmail.com`), no uno de
+  desarrollo ni de una cuenta personal.
+
+**Tareas, en este orden:**
+
+1. Congelar escrituras en Firestore, export final y reconciliación —
+   `docs/runbook-corte-produccion.md`.
+2. Cambiar el DNS de `observatorio.jufejus.org.ar` al túnel nombrado.
+3. Verificar los tres métodos de login en producción (contraseña, Google,
+   enlace mágico) contra el dominio real.
+4. Guardar una copia del snapshot de Firestore y de BigQuery **fuera**
+   del servidor y **fuera** de git — contienen datos reales (Principio
+   XIII/D15).
+5. Apagar sin borrar, en el proyecto viejo: Firestore, Firebase Auth, el
+   pipeline Firestore → BigQuery, las tablas de BigQuery, y cualquier
+   función o scheduler que quede. Esperar un período de gracia y
+   verificar que nada falle antes de borrar nada.
+6. Revocar credenciales viejas: claves de cuentas de servicio, clientes
+   OAuth y tokens del proyecto viejo.
+7. Dar de baja el proyecto de la app vieja en Vercel.
+
+**NO dar de baja** (sigue en uso por la app nueva o por reporting):
+
+- El proyecto de GCP de reporting (API de Sheets, cuenta de servicio
+  `observatorio-reporting-sheets`).
+- El cliente OAuth del login de la app nueva.
+- Looker Studio, Google Sheets, ni el Google Workspace del dominio.
+
+**Antes de dar de baja nada de una cuenta personal**: verificar quién es
+el titular de los reportes de Looker Studio existentes y, si los creó la
+cuenta personal (no la institucional), transferirlos a
+`forojufejus@gmail.com` antes de tocar esa cuenta — de lo contrario los
+reportes se pierden junto con la cuenta.
+
 ---
 
 ## Lo que NO entra en este plan (backlog, post-corte)
@@ -269,3 +393,11 @@ uno como su propia feature-spec cuando corresponda.
   fases originales del proyecto (modelo de datos cerrado, backend cerrado
   con ajustes pendientes en 007, frontend en cierre, reporting sin
   empezar).
+- **2026-10-07:** agregadas las "Reglas operativas" (registro de todo
+  cambio a nivel sistema); formalizado en Fase E el "Pedido al proveedor
+  de infraestructura" (7 pedidos a partir de hechos verificados ese día —
+  disco al 100% con ~21,7 GiB sin explicar, sin supervisión de procesos,
+  sin confirmar qué persiste ante un reinicio/recreación del contenedor —
+  los primeros 5 marcados URGENTES); y agregada en Fase F la lista de
+  tareas para el día de la baja de la app vieja, con sus prerrequisitos y
+  qué NO se da de baja.

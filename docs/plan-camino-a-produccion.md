@@ -28,6 +28,12 @@ para quien herede el servidor. Un agente (humano o IA) que use `sudo`
 como parte de una tarea lo informa explícitamente en su resumen final,
 aunque la tarea en sí no haya sido sobre infraestructura.
 
+rplazas (armó este servidor) tiene cuenta propia y puede ingresar para
+chequeos o tareas de supervisión. Esta regla no es solo para agentes:
+cualquier cambio de sistema que haga rplazas también se registra acá,
+con fecha, comando y motivo — mismo criterio, sin importar quién lo
+ejecute.
+
 ---
 
 ## Fase A — Cerrar `007`: backend de identidad y autorización
@@ -229,65 +235,92 @@ endpoints de auth, Fase B cambia pantallas).
   antes, en Fase C, para verificar el dominio de envío de Resend — si se
   consigue ese acceso para Fase C, ya está disponible acá también.
 - Lista de requerimientos al proveedor de infraestructura: formalizada
-  (2026-10-07) en la subsección de abajo — ya no es un pendiente sin
-  escribir.
+  (2026-10-07, actualizada 2026-10-10) en la subsección de abajo — ya no
+  es un pendiente sin escribir.
 - Gestión de procesos real — hoy backend y frontend corren con `tsx watch`
   / `vite dev`, modo desarrollo; producción necesita `systemd` o
   equivalente, con reinicio automático ante caída. Ver pedido 4, abajo.
 
 ### Pedido al proveedor de infraestructura
 
-Hechos verificados el 2026-10-07 sobre el servidor de desarrollo actual
-(`foros-ubuntu`):
+Hechos verificados el 2026-10-10 sobre el servidor de desarrollo actual
+(`foros-ubuntu`) — reemplazan lo anotado el 2026-10-07, que quedaba
+incompleto en el diagnóstico de disco y equivocado sobre `/home`:
 
-- **Supervisión de procesos.** El contenedor es Docker; PID 1 es `sshd`,
-  sin supervisor ni `systemd`. Backend, frontend, el túnel de Cloudflare y
-  la sesión de cron corren en `tmux` o a mano — si el contenedor se
+- **Disco — `/` es la capa de escritura del contenedor, no un volumen
+  propio.** El `upperdir` de ese overlay vive en
+  `/var/lib/containerd/.../snapshots/527/fs` — es decir, `/` es la capa
+  de escritura de este contenedor específico dentro del storage de
+  `containerd` del host, no un disco dedicado. `df` reporta la partición
+  del **host** completa: ~24 GB, 98% (22,6 GiB usados, ~500 MiB libres).
+  Desde adentro del contenedor solo se explican 1,12 GiB — quedan
+  **21,47 GiB sin explicar**, y ese número está **estable** entre el 7/10
+  y el 10/10 (tres días sin moverse), lo que descarta la hipótesis
+  anterior de un crecimiento sostenido: es un consumo fijo, ajeno a este
+  contenedor, en algún otro lugar del storage de `containerd` del host
+  (otro contenedor, una imagen vieja, una capa huérfana). Línea de tiempo
+  del espacio libre: 1,2 GB el 29/9 → 230 MiB el 7/10 → 500 MiB el 10/10
+  (el leve respiro del 7 al 10 tampoco es de este contenedor — nada se
+  liberó desde adentro).
+- **`/home` — corrección de lo anotado el 29/9 ("`/home` es propio"): es
+  compartido, no exclusivo.** Es el montaje de `/foros-jufejus/home`
+  sobre un volumen XFS de 50 GB, con `noquota` — sin límite por usuario
+  ni por directorio. Uso total del volumen: 42 GB usados, 8 GB libres;
+  de esos 42 GB, lo propio de este proyecto es 4,9 GB. El resto (~37 GB)
+  es de otro uso del mismo volumen compartido, no de este contenedor —
+  sin cuota, un consumo ajeno ahí también puede dejarnos sin espacio acá.
+- **Supervisión de procesos.** PID 1 del contenedor es `sshd`, sin
+  supervisor ni `systemd`. Backend, frontend, el túnel de Cloudflare y la
+  sesión de cron corren en `tmux` o a mano — si el contenedor se
   reinicia, nada los vuelve a levantar. (El crontab de reportes, 6:00 y
   12:00, sí funciona mientras el contenedor sigue arriba — ver
   `docs/runbook-reportes-sheets.md`.)
-- **Disco.** `/` es un overlay de 24 GB, al 100% (22,9 GiB usados, 230 MiB
-  libres). El 2026-09-29 estaba al 95%, con ~1,2 GB libres — se agotó en
-  poco más de una semana. Desde adentro del contenedor, `du -x /` solo
-  explica 1,2 GB (911 MB el 29/9): `/var/log` pesa 1,4 MB, `/tmp` 43 MB,
-  sin archivos borrados retenidos por ningún proceso. Quedan **~21,7 GiB
-  sin explicar** — que los esté usando otro contenedor o el host mismo es
-  una inferencia razonable, no algo confirmado desde adentro.
-- **Postgres sobre el mismo overlay.** El directorio de datos
-  (`/var/lib/postgresql/16/main`) pesa 67 MB; la base en sí, 11 MB —
-  chico hoy, pero vive en el mismo disco al 100% de arriba.
-- **`/home`** es un volumen aparte, 50 GB, 11 GB libres. No se sabe si
-  persiste si el contenedor se recrea (no solo se reinicia).
-- **Hay un backup**, `~/backups/observatorio-2026-10-07.dump` (158 KB,
-  índice legible con `pg_restore -l`, restauración completa NO probada
-  todavía). No está versionado — contiene datos reales (Principio
-  XIII/D15).
+- **Postgres sobre la capa de escritura del contenedor.** El directorio
+  de datos (`/var/lib/postgresql/16/main`) pesa 67 MB y vive en `/` — es
+  decir, en el overlay de arriba. Se perderían si el contenedor se
+  recrea (no solo se reinicia) — sin confirmar todavía, ver pedido 2.
 - `pg_hba.conf` venía en `trust` desde el aprovisionamiento inicial del
   servidor (corregido acá el 2026-09-29, D21).
 
-**Pedidos — 1 a 5 son URGENTES (riesgo real de caída hoy), 6 y 7 son
-previos al corte de Fase F, no urgentes hoy:**
+**Contexto, para calibrar la urgencia real:** la base de este servidor es
+de **pruebas** — la fuente de verdad del Observatorio sigue siendo
+Firestore hasta el corte (Fase F). El riesgo de todo lo de arriba es hoy
+para el **entorno de desarrollo** (perder trabajo de prueba, tener que
+rearmar el servidor), no para datos de producción, que todavía no
+existen acá. Se vuelve bloqueante recién antes del corte — no es
+indiferente, pero tampoco es una emergencia de datos reales en este
+momento.
 
-1. **[URGENTE]** Identificar qué consume el espacio de `/` (los ~21,7 GiB
-   sin explicar desde adentro del contenedor) y liberarlo.
-2. **[URGENTE]** Cuota de disco garantizada para este contenedor — hoy
-   puede quedarse sin espacio por algo ajeno a esta aplicación.
-3. **[URGENTE]** Confirmar qué persiste si el contenedor se reinicia o se
-   recrea — tanto `/` como `/home` — hoy no se sabe.
-4. **[URGENTE]** Supervisión de procesos con reinicio automático
-   (entrypoint con `supervisord`/`s6`, o contenedores separados con
+**Interlocutor:** rplazas armó este servidor y puede ingresar para
+chequeos o tareas de supervisión.
+
+**Pedidos — todos previos al corte de Fase F; 1 y 2 cuanto antes (son los
+que explican el estado actual del disco), el resto sin apuro inmediato:**
+
+1. Identificar qué consume los 21,47 GiB sin explicar en el storage de
+   `containerd` del host (no de este contenedor) y una cuota de disco
+   garantizada para este contenedor — hoy el disco lo puede agotar algo
+   completamente ajeno a esta aplicación.
+2. Confirmar qué sobrevive a un reinicio del contenedor y qué sobrevive a
+   que se **recree** (son dos preguntas distintas) — tanto `/` como
+   `/home`.
+3. Supervisión de procesos con reinicio automático (entrypoint con
+   `supervisord`/`s6`, o contenedores separados con
    `restart: unless-stopped`), incluido el cron de reportes.
-5. **[URGENTE]** Backups: snapshots del volumen y de la base, frecuencia,
-   retención y una prueba de restauración real (no solo el índice
-   legible); mover el directorio de datos de Postgres a un volumen
-   persistente, fuera del overlay de `/`.
-6. Mecanismo para inyectar secretos por entorno
-   (`BETTER_AUTH_SECRET`, `DATABASE_URL`, `RESEND_API_KEY`, credenciales
-   de Google) sin dejarlos en el repo — ver también el punto de secretos
-   por entorno ya listado abajo.
-7. Confirmar que la imagen de producción no hereda `pg_hba.conf` en
-   `trust` (ver hecho verificado arriba — ya pasó una vez en este
-   servidor de desarrollo).
+4. Un volumen persistente, con cuota propia (no `noquota` compartido como
+   `/home` hoy), para el directorio de datos de Postgres — sacarlo de la
+   capa de escritura del contenedor.
+5. Mecanismo para inyectar secretos por entorno (`BETTER_AUTH_SECRET`,
+   `DATABASE_URL`, `RESEND_API_KEY`, credenciales de Google) sin dejarlos
+   en el repo — ver también el punto de secretos por entorno ya listado
+   abajo — y confirmar que la imagen de producción no hereda
+   `pg_hba.conf` en `trust` (ya pasó una vez en este servidor de
+   desarrollo).
+
+El pedido de backups/snapshots que estaba acá se movió a
+`docs/runbook-corte-produccion.md` ("Backup y restauración de
+PostgreSQL") — ese documento es donde vive el resto de la estrategia de
+backup del corte, tiene más sentido ahí que repartido en dos lugares.
 
 **Nota — instalación de paquetes del 2026-10-05, no relacionada con el
 problema de disco de arriba:** a las 22:47, para poder correr los tests
@@ -298,9 +331,10 @@ apt-get install` 87 paquetes de sistema (`libnspr4`, `libnss3`,
 para correr E2E en este servidor de **desarrollo** y **no deben estar en
 la imagen de producción** — los E2E corren en un entorno aparte, nunca en
 el servidor que sirve tráfico real. Esta instalación es ~360 MB; el
-espacio sin explicar de arriba es ~21,7 GiB — no es la causa del problema
-de disco, se anota acá solo por la regla operativa de dejar registrado
-todo cambio a nivel sistema (ver arriba).
+espacio sin explicar es ~21,47 GiB y estable desde antes de esta
+instalación (ver arriba) — no es la causa del problema de disco, se
+anota acá solo por la regla operativa de dejar registrado todo cambio a
+nivel sistema.
 
 - Credenciales OAuth de Google **reales**, de producción, con el dominio
   final registrado como `redirect_uri` — resuelve T030 de la Fase B de
@@ -310,7 +344,9 @@ todo cambio a nivel sistema (ver arriba).
   nunca el mismo valor.
 - **D10**: decidir si el rate limiting de login pasa de SHOULD a MUST
   antes del corte real (la propia constitution ya preveía esta revisión).
-- Estrategia de backup de PostgreSQL en producción (no discutida todavía).
+- Estrategia de backup de PostgreSQL: ver
+  `docs/runbook-corte-produccion.md` ("Backup y restauración de
+  PostgreSQL") — ya no es un pendiente sin discutir.
 - Reescritura del historial de git para sacar los datos reales que
   quedaron en dos commits viejos (D15/D19) — sesión dedicada, aparte de
   cualquier otra tarea, con el checklist que ya quedó escrito en D15
@@ -401,3 +437,14 @@ uno como su propia feature-spec cuando corresponda.
   los primeros 5 marcados URGENTES); y agregada en Fase F la lista de
   tareas para el día de la baja de la app vieja, con sus prerrequisitos y
   qué NO se da de baja.
+- **2026-10-10:** reescrito el "Pedido al proveedor de infraestructura"
+  con hechos nuevos — `/` es la capa de escritura del contenedor sobre el
+  storage de `containerd` del host (no un disco propio), los 21,47 GiB
+  sin explicar están estables desde el 7/10 (descarta crecimiento
+  sostenido), y `/home` resultó compartido con `noquota` (corrige lo
+  anotado el 29/9 de que era "propio"). Sacados los rótulos `[URGENTE]`
+  — contexto agregado: la base de este servidor es de pruebas, Firestore
+  sigue siendo la fuente de verdad hasta el corte. Agregado el
+  interlocutor (rplazas) y sumado a "Reglas operativas" que sus cambios
+  de sistema también se registran acá. Movido el pedido de
+  backups/snapshots a `docs/runbook-corte-produccion.md`.

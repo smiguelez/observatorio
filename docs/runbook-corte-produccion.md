@@ -80,6 +80,30 @@ verificados).
 
 ---
 
+## Cambios manuales en la base fuera de migraciones
+
+El paso 3 de arriba exige un ambiente Postgres reproducible **por
+script**, no por comandos tipeados a mano. Verificado contra
+`backend/migrations/` y `db/seeds/` (2026-10-10): estos cambios se
+hicieron a mano por `psql` en el servidor de desarrollo y **no están
+capturados en ningún script** — correr `db/schema.sql` + `db/seeds/` +
+`backend/migrations/` de punta a punta en un ambiente nuevo, hoy, NO
+reproduce el estado real de esta base. Hay que convertir cada uno en una
+migración (o corregir el seed correspondiente) antes del corte real.
+
+| Cambio | ¿En alguna migración? | ¿En `db/seeds/`? | Verificado |
+|---|---|---|---|
+| Columna `provincias.codigo_iso` (`ALTER TABLE` + `UPDATE`, 2026-09-30) | No — ninguna migración agrega la columna | No — `db/schema.sql` tampoco la tiene en el `CREATE TABLE provincias` | `\d provincias` muestra la columna; `grep codigo_iso backend/migrations/*.ts` solo la usa en `SELECT` (vistas de reporting), ninguna la crea. |
+| Nombres de provincia corregidos (Entre Ríos, Río Negro, CABA → "Ciudad Autónoma de Buenos Aires", Tierra del Fuego → nombre largo con Antártida) | No | No — `db/seeds/01_provincias.sql` todavía tiene `'CABA'`, `'Entre Rios'` (sin tilde), `'Rio Negro'` (sin tilde) y `'Tierra del Fuego'` (nombre corto) | Comparado el seed contra `SELECT nombre FROM provincias` real: los 4 nombres difieren del seed. |
+| Fueros agregados: `contencioso administrativo`, `de paz`, `penal juvenil` | No — ninguna migración toca la tabla `fueros` | No — `db/seeds/05_fueros.sql` solo siembra los 4 originales (`penal`, `civil`, `familia`, `laboral`) | `SELECT nombre FROM fueros` real tiene 7 filas; el seed, 4. |
+| Rol `metabase_ro` (rol de Postgres de solo lectura, no la tabla `roles` de la app) | No — varias migraciones (0006 en adelante) le hacen `GRANT`/`REVOKE` *si ya existe*, ninguna lo crea | No — `db/seeds/06_roles.sql` siembra la tabla `roles` de la app (`admin`/`usuario_normal`), no tiene relación con esto | `SELECT rolname FROM pg_roles WHERE rolname='metabase_ro'` existe; sin `CREATE ROLE` en ningún script del repo. |
+
+No se marcan más candidatos que estos cuatro — son los que se pidió
+verificar. Puede haber otros cambios a mano no relevados todavía; este
+chequeo no es exhaustivo sobre toda la base, solo sobre esta lista.
+
+---
+
 ## Anomalías conocidas (detectar y frenar para confirmación — no auto-resolver)
 
 | Patrón | Visto en migración de prueba | Regla de detección |
@@ -90,10 +114,45 @@ verificados).
 
 ---
 
+## Backup y restauración de PostgreSQL
+
+**Hoy (servidor de desarrollo):** la base es de **pruebas** — no hay
+backup periódico configurado. Existe un dump suelto,
+`~/backups/observatorio-2026-10-07.dump` (158 KB), sin versionar y con
+restauración nunca probada de punta a punta (ver también
+`docs/plan-camino-a-produccion.md`, Fase E).
+
+**Antes del corte** (entre el paso 6 — reconciliación, gate verde — y el
+paso 8 — encender la app nueva — de "Pasos del corte real" arriba):
+
+1. Dump de la base recién migrada, apenas la reconciliación dio gate
+   verde y antes de encender la app nueva — el dump de referencia del
+   corte es el de ESE momento, no uno de una corrida anterior.
+2. Verificar el dump con `pg_restore -l` (lista el contenido sin
+   restaurar) y además restaurarlo de verdad en una base **descartable**
+   (no la real), comparando conteos de filas contra la base original —
+   un índice legible no prueba que la restauración completa funcione.
+
+**Después del corte** (producción real, no discutido en detalle
+todavía): backup periódico — frecuencia y retención a definir —, con una
+copia **fuera** del servidor, y una prueba de restauración periódica (no
+solo al armar el backup la primera vez). Consultar a rplazas si el host
+ofrece snapshots del volumen a nivel infraestructura, como alternativa o
+complemento al `pg_dump` aplicativo.
+
+**Datos reales — D15.** Los dumps de Postgres contienen emails reales de
+usuarios. Nunca en git. En el filesystem: archivo del dump en `600`
+(lectura/escritura solo del dueño), directorio que lo contiene en `700`.
+
+---
+
 ## Requerimientos a definir con el proveedor de infraestructura
 
-*(pendiente — placeholder para cuando se llegue a la etapa de pruebas de la
-nueva app; no bloquea nada de la migración de datos)*
+Formalizados en `docs/plan-camino-a-produccion.md`, Fase E, sección
+"Pedido al proveedor de infraestructura" (actualizada por última vez
+2026-10-10) — ya no es un placeholder sin empezar. El pedido de
+backups/snapshots que originalmente iba a vivir acá se resolvió en la
+sección de arriba ("Backup y restauración de PostgreSQL") en su lugar.
 
 ---
 
@@ -102,3 +161,10 @@ nueva app; no bloquea nada de la migración de datos)*
 - **2026-09-18:** documento creado a partir de la migración de prueba de la
   feature `001-modelo-datos-relacional` (US1-US3 completos, D-15/D-16/D-17
   resueltas por Santi durante la corrida).
+- **2026-10-10:** agregada "Cambios manuales en la base fuera de
+  migraciones" (4 cambios hechos a mano por `psql` que ni una migración
+  ni un seed reproducen: columna `provincias.codigo_iso`, 4 nombres de
+  provincia corregidos, 3 fueros agregados, el rol `metabase_ro`); y
+  "Backup y restauración de PostgreSQL" (antes/después del corte,
+  movida acá desde el pedido al proveedor de infraestructura de
+  `docs/plan-camino-a-produccion.md`).

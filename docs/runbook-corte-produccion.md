@@ -93,14 +93,103 @@ migración (o corregir el seed correspondiente) antes del corte real.
 
 | Cambio | ¿En alguna migración? | ¿En `db/seeds/`? | Verificado |
 |---|---|---|---|
-| Columna `provincias.codigo_iso` (`ALTER TABLE` + `UPDATE`, 2026-09-30) | No — ninguna migración agrega la columna | No — `db/schema.sql` tampoco la tiene en el `CREATE TABLE provincias` | `\d provincias` muestra la columna; `grep codigo_iso backend/migrations/*.ts` solo la usa en `SELECT` (vistas de reporting), ninguna la crea. |
-| Nombres de provincia corregidos (Entre Ríos, Río Negro, CABA → "Ciudad Autónoma de Buenos Aires", Tierra del Fuego → nombre largo con Antártida) | No | No — `db/seeds/01_provincias.sql` todavía tiene `'CABA'`, `'Entre Rios'` (sin tilde), `'Rio Negro'` (sin tilde) y `'Tierra del Fuego'` (nombre corto) | Comparado el seed contra `SELECT nombre FROM provincias` real: los 4 nombres difieren del seed. |
-| Fueros agregados: `contencioso administrativo`, `de paz`, `penal juvenil` | No — ninguna migración toca la tabla `fueros` | No — `db/seeds/05_fueros.sql` solo siembra los 4 originales (`penal`, `civil`, `familia`, `laboral`) | `SELECT nombre FROM fueros` real tiene 7 filas; el seed, 4. |
-| Rol `metabase_ro` (rol de Postgres de solo lectura, no la tabla `roles` de la app) | No — varias migraciones (0006 en adelante) le hacen `GRANT`/`REVOKE` *si ya existe*, ninguna lo crea | No — `db/seeds/06_roles.sql` siembra la tabla `roles` de la app (`admin`/`usuario_normal`), no tiene relación con esto | `SELECT rolname FROM pg_roles WHERE rolname='metabase_ro'` existe; sin `CREATE ROLE` en ningún script del repo. |
+| Columna `provincias.codigo_iso` (`ALTER TABLE` + `UPDATE`, 2026-09-30) | **Sí, desde 2026-10-12** — `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` + `UPDATE` por id, al inicio de `up()` de `0005_vistas_reporting_dashboard1.ts` (excepción deliberada a "no se edita una migración aplicada" — justificada en el propio comentario del archivo; no-op en la base real, que ya tenía la columna) | No — `db/schema.sql` sigue sin ella a propósito (ver más abajo, "Orden real de reconstrucción") | Reproducido el fallo (`column p.codigo_iso does not exist` en `0005`) y la corrección en una base descartable antes de aplicar nada a la base real. |
+| Nombres de provincia corregidos (Entre Ríos, Río Negro, CABA → "Ciudad Autónoma de Buenos Aires", Tierra del Fuego → nombre largo con Antártida) | **Sí, desde 2026-10-12** — `0016_nombres_provincia_corregidos.ts`, `UPDATE` por id, idempotente, `down()` restaura los nombres viejos | No, a propósito — ver más abajo por qué | `migration/` (carga de Firestore) cruza provincias por NOMBRE, no por id (`buildNameIdMap` en varios `load/*.js`) contra el string que viene de Firestore — si el seed ya tuviera el nombre corregido, esa carga fallaría con "provincia desconocida" en cada fila de esas 4 provincias. Por eso el seed se deja como está y la corrección va en una migración que corre DESPUÉS de la carga de Firestore (ver orden real abajo). |
+| Fueros agregados: `contencioso administrativo`, `de paz`, `penal juvenil` | No — ninguna migración toca la tabla `fueros` | No — `db/seeds/05_fueros.sql` solo siembra los 4 originales (`penal`, `civil`, `familia`, `laboral`) | `SELECT nombre FROM fueros` real tiene 7 filas; el seed, 4. **Fuera de alcance** de esta verificación (no analizado ni corregido). |
+| Rol `metabase_ro` (rol de Postgres de solo lectura, no la tabla `roles` de la app) | No, y **no va a ir** — lleva contraseña, nunca en un archivo versionado | No — `db/seeds/06_roles.sql` siembra la tabla `roles` de la app (`admin`/`usuario_normal`), no tiene relación con esto | `SELECT rolname FROM pg_roles WHERE rolname='metabase_ro'` existe; sin `CREATE ROLE` en ningún script del repo. Paso manual documentado abajo. |
 
 No se marcan más candidatos que estos cuatro — son los que se pidió
 verificar. Puede haber otros cambios a mano no relevados todavía; este
 chequeo no es exhaustivo sobre toda la base, solo sobre esta lista.
+
+### Paso manual: crear el rol `metabase_ro`
+
+No va en ninguna migración — lleva contraseña, y ninguna credencial vive
+en un archivo versionado (Principio XIII). Se ejecuta a mano, **ANTES**
+de `npm run migrate:public` — las migraciones desde `0006` le hacen
+`GRANT`/`REVOKE` *si el rol ya existe* (nunca lo crean), así que si este
+paso no se hizo todavía, esas migraciones simplemente no le otorgan nada
+todavía (no fallan, pero tampoco sirven de nada hasta que el rol exista).
+
+```sql
+CREATE ROLE metabase_ro WITH LOGIN PASSWORD '<definir>';
+GRANT CONNECT ON DATABASE observatorio TO metabase_ro;
+GRANT USAGE ON SCHEMA public TO metabase_ro;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO metabase_ro;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO metabase_ro;
+```
+
+El `ALTER DEFAULT PRIVILEGES` cubre tablas/vistas que se creen **después**
+de este paso (p. ej. las vistas de reporting de `0005` en adelante) —
+sin él, cada vista nueva necesitaría su propio `GRANT` manual otra vez,
+que es justo el problema que encontró `0006` (D21,
+`docs/decisiones-pendientes.md`): los permisos de esta base real se
+otorgaron por objeto, no con `ALTER DEFAULT PRIVILEGES`, y las vistas de
+`0005` se quedaron sin acceso hasta que `0006` lo corrigió. Hacerlo bien
+en este paso manual evita repetir ese mismo problema en una reconstrucción
+nueva.
+
+### Orden real de reconstrucción desde cero (reemplaza al de 3 pasos de `quickstart.md`)
+
+`specs/001-modelo-datos-relacional/quickstart.md` (Pasos 1-3) documenta
+un orden de **3** pasos (esquema, seeds, herramienta de migración) — es
+de antes de que existieran las migraciones Kysely (`backend/migrations/`,
+desde `003-taxonomia-parametrizable`) y quedó **desactualizado**: no
+menciona un paso que hoy es obligatorio. El orden real, verificado
+(2026-10-10/12) reconstruyendo en una base descartable:
+
+1. **`db/schema.sql`** — esquema base. `provincias` sin `codigo_iso` a
+   propósito (ver tabla de arriba).
+2. **`db/seeds/01..07_*.sql`**, en orden — catálogos, con los nombres de
+   provincia SIN corregir a propósito (ver tabla de arriba).
+3. **`migration/`** (herramienta Firestore→Postgres, `node run.js`) —
+   carga los datos reales/snapshot. Precondición de su propio README:
+   esquema + seeds ya aplicados.
+4. **`backend/migrations/` (`npm run migrate:public`)** — con el paso
+   manual de `metabase_ro` (arriba) hecho **antes** de este paso, no
+   después.
+
+**El paso 4 depende del paso 3**, no son independientes: la migración
+`0001_taxonomia_parametrizable.ts` no es solo DDL — renombra
+`evaluaciones_taxonomicas` a `_v1_legacy` y después hace un
+`INSERT...SELECT` (unpivot) que **lee esa tabla** para poblar la nueva
+`evaluaciones_taxonomicas` (801 filas reales en la base real, según
+`specs/003-taxonomia-parametrizable/research.md`). Si el paso 4 corriera
+antes que el 3, ese backfill operaría sobre una tabla vacía — no da
+error, pero pierde datos reales en silencio. Reproducido en la base
+descartable saltando el paso 3 a propósito (sin usar datos reales): el
+backfill corrió con 0 filas, consistente con el diagnóstico.
+
+**Detalle de implementación de Kysely, verificado en el código fuente de
+la librería (`node_modules/kysely/dist/esm/migration/migrator.js`):**
+`migrateToLatest()` envuelve **todo el batch de migraciones pendientes de
+una corrida** en una sola transacción cuando el adapter soporta DDL
+transaccional (Postgres sí) y no se pasó `disableTransactions` (este
+proyecto no lo pasa, `backend/scripts/migrate-public.ts`). Si una
+migración del batch falla, se revierten **todas** las de esa misma
+corrida — incluidas las que ya habían impreso "ejecutada correctamente"
+en la consola. Confirmado al reproducir el fallo de `codigo_iso`: después
+del error en `0005`, `migrations.kysely_migration` tenía **0 filas**,
+aunque `0001` a `0004` habían impreso éxito. En la base real esto no
+pasó porque `0001`-`0015` se aplicaron en corridas separadas a lo largo
+de varios días, no en una sola invocación — pero conviene saberlo: si una
+reconstrucción futura corre `npm run migrate:public` una sola vez y falla
+a mitad de camino, **revisar `migrations.kysely_migration`** antes de
+asumir que lo anterior quedó aplicado.
+
+**No volver a correr `migration/` (la carga desde Firestore) sobre una
+base que ya tiene `0016` aplicada.** `0016_nombres_provincia_corregidos.ts`
+deja `provincias.nombre` con los 4 nombres corregidos (Entre Ríos, Río
+Negro, Ciudad Autónoma de Buenos Aires, Tierra del Fuego con el nombre
+largo) — pero `migration/` sigue cruzando provincias por **nombre**
+contra Firestore (`buildNameIdMap`, ver tabla de arriba), y Firestore
+tiene los nombres viejos. Si `migration/` corriera después de `0016`,
+fallaría con `"provincia desconocida"` en cada organismo/localidad/
+usuario/grupo de esas 4 provincias. La reconstrucción **siempre** parte
+de `db/schema.sql` + `db/seeds/` (nombres viejos, sin corregir) — nunca
+de una base que ya pasó por `0016` — y recién después de que `migration/`
+termine entran las migraciones Kysely (que incluyen `0016`, al final de
+ese mismo orden).
 
 ---
 
@@ -168,3 +257,22 @@ sección de arriba ("Backup y restauración de PostgreSQL") en su lugar.
   "Backup y restauración de PostgreSQL" (antes/después del corte,
   movida acá desde el pedido al proveedor de infraestructura de
   `docs/plan-camino-a-produccion.md`).
+- **2026-10-12:** resueltos 2 de los 4 cambios manuales de la tabla de
+  arriba. `provincias.codigo_iso` — excepción deliberada a "no se edita
+  una migración aplicada": `ALTER TABLE ADD COLUMN IF NOT EXISTS` +
+  `UPDATE` por id agregado al inicio de `up()` de
+  `0005_vistas_reporting_dashboard1.ts` (no-op en la base real, ya
+  tenía la columna). Nombres de provincia — migración nueva,
+  `0016_nombres_provincia_corregidos.ts`, `UPDATE` por id, `down()`
+  reversible. `metabase_ro` — paso manual documentado abajo (SQL exacto,
+  sin contraseña), corregido el comentario de `0006` que mencionaba un
+  "script aparte" que nunca existió. Agregadas las secciones "Orden real
+  de reconstrucción desde cero" (4 pasos, reemplaza al de 3 de
+  `quickstart.md`) y el detalle de que Kysely revierte el batch completo
+  de una corrida si una migración falla. Probado de punta a punta en una
+  base descartable (16/16 migraciones, 24/24 provincias con
+  `codigo_iso`) y después aplicado a la base real: `0016` corrió sola
+  (0001-0015 ya trackeadas), diff de `provincias` antes/después vacío,
+  `tsc` limpio, suite completa 245/245. Dump de la base real tomado
+  antes de aplicar (`~/backups/observatorio-2026-10-12.dump`, `600`,
+  fuera del repo). Fueros: fuera de alcance, no tocados.

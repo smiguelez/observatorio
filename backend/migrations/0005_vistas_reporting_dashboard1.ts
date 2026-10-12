@@ -29,10 +29,39 @@
 // barras no cambie de categorías de una corrida a otra. La de provincia incluye `codigo_iso`
 // (`provincias.codigo_iso`, ISO 3166-2) porque el mapa lo necesita para cruzar contra el GeoJSON
 // (ver Fase D del plan — el mapeo id-numérico↔`codigo_iso` del GeoJSON ya se resolvió aparte).
+//
+// EXCEPCIÓN DELIBERADA a "una migración aplicada no se edita" (2026-10-12, pedido explícito del
+// usuario, docs/runbook-corte-produccion.md tiene el detalle completo): esta migración YA está
+// aplicada en la base real, y `provincias.codigo_iso` ya existe ahí — agregado a mano por `psql`,
+// nunca por ningún script (verificado: ni `db/schema.sql`, ni `db/seeds/`, ni ninguna migración lo
+// crea). El problema no es la base real (que ya tiene la columna) sino CUALQUIER reconstrucción
+// desde cero: en el orden real (`db/schema.sql` → `db/seeds/` → `migration/` → `backend/migrations/`,
+// ver el runbook), esta migración es la PRIMERA que usa `codigo_iso` — sin el `ALTER TABLE` de
+// abajo, `up()` falla acá con `column p.codigo_iso does not exist` (reproducido en una base
+// descartable antes de este cambio). Editar el archivo es seguro: en la base real, Kysely ya tiene
+// esta migración trackeada en `migrations.kysely_migration` y nunca la vuelve a correr — el único
+// efecto de este cambio es en una reconstrucción futura que todavía no llegó a este punto. El
+// `ALTER`/`UPDATE` de abajo son idempotentes (`IF NOT EXISTS`, mismos valores siempre) — en la base
+// real, si alguna vez se re-auditara manualmente, son no-ops.
 import { Kysely, sql } from 'kysely'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function up(db: Kysely<any>): Promise<void> {
+  // Ver "EXCEPCIÓN DELIBERADA" arriba. Mismo mapeo ISO 3166-2 que ya tiene la base real
+  // (verificado por id antes de este cambio, no por nombre — los nombres de 4 provincias se
+  // corrigen aparte, en 0016, después de que `migration/` haya cargado Firestore).
+  await sql`ALTER TABLE provincias ADD COLUMN IF NOT EXISTS codigo_iso text`.execute(db)
+  await sql`
+    UPDATE provincias AS p SET codigo_iso = v.codigo_iso
+      FROM (VALUES
+        (1, 'AR-B'), (2, 'AR-C'), (3, 'AR-K'), (4, 'AR-H'), (5, 'AR-U'), (6, 'AR-X'),
+        (7, 'AR-W'), (8, 'AR-E'), (9, 'AR-P'), (10, 'AR-Y'), (11, 'AR-L'), (12, 'AR-F'),
+        (13, 'AR-M'), (14, 'AR-N'), (15, 'AR-Q'), (16, 'AR-R'), (17, 'AR-A'), (18, 'AR-J'),
+        (19, 'AR-D'), (20, 'AR-Z'), (21, 'AR-S'), (22, 'AR-G'), (23, 'AR-V'), (24, 'AR-T')
+      ) AS v(id, codigo_iso)
+     WHERE p.id = v.id
+  `.execute(db)
+
   await sql`
     CREATE VIEW vista_kpis_generales AS
     SELECT

@@ -9,10 +9,17 @@
 // 0005 ya está aplicada: no se edita (convención de este proyecto, ver comentario de 0004) — se
 // corrige acá, en una migración nueva.
 //
-// El `GRANT` es CONDICIONAL: `metabase_ro` lo crea un script aparte, no una migración de este
-// runner — en un ambiente nuevo donde las migraciones corran ANTES de que el rol exista, un `GRANT`
-// incondicional rompería la migración entera por "el rol no existe". Si el rol todavía no existe
-// acá, no hay nada que otorgar todavía (y no hace falta: nadie sin el rol puede pedir el permiso).
+// El `GRANT` es CONDICIONAL: `metabase_ro` se crea a mano, por fuera de las migraciones de este
+// runner (lleva contraseña — nunca en un archivo versionado; el paso manual exacto está en
+// docs/runbook-corte-produccion.md, "Cambios manuales en la base fuera de migraciones" → "Paso
+// manual: crear el rol metabase_ro"). CORREGIDO (2026-10-12): este comentario decía antes "lo crea
+// un script aparte" — no existe tal script en ningún lugar del repo (verificado por grep en
+// `migration/`, `backend/scripts/` y `docs/`); era una descripción de algo que nunca se escribió.
+// En un ambiente nuevo donde las migraciones corran ANTES de que el rol exista (si el paso manual
+// del runbook
+// todavía no se hizo), un `GRANT` incondicional rompería la migración entera por "el rol no
+// existe". Si el rol todavía no existe acá, no hay nada que otorgar todavía (y no hace falta: nadie
+// sin el rol puede pedir el permiso).
 import { Kysely, sql } from 'kysely'
 
 const VISTAS = [
